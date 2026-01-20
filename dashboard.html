@@ -65,7 +65,7 @@
     </script>
 </head>
 
-<body class="dashboard">
+<body class="dashboard-page">
 <header class="header">
     <div class="logo">Cognivex</div>
 
@@ -77,60 +77,54 @@
     <button class="btn btn-text" onclick="window.authHandler.logout()">Sign Out</button>
 </header>
 
-<main class="main-content">
+<main class="dashboard-main">
 
-    <section class="text-input-section">
-        <h2>Research Notes</h2>
+    <!-- INPUT SECTION -->
+    <section class="input-section">
+        <div class="section-container">
+            <h2>Research Notes</h2>
+            <p class="section-subtitle">Enter your research notes or observations below</p>
 
-        <textarea
-            id="researchNotes"
-            class="text-input"
-            placeholder="Type your research notes here..."
-            rows="8"
-        ></textarea>
+            <textarea
+                id="researchNotes"
+                class="text-input"
+                placeholder="Type your research notes, findings, or observations here..."
+                rows="10"
+            ></textarea>
 
-        <div class="button-group">
-            <button id="viewTextBtn" class="btn btn-secondary">View Entered Text</button>
-            <button id="clearTextBtn" class="btn btn-text">Clear</button>
+            <div class="button-group">
+                <button id="saveTextBtn" class="btn btn-primary">Save Notes</button>
+                <button id="clearTextBtn" class="btn btn-secondary">Clear</button>
+            </div>
+
+            <div id="feedback-message" class="feedback-message"></div>
         </div>
     </section>
 
-    <section class="content-section">
-        <h3>Research Content</h3>
-        <div class="scrollable-content" id="researchContent">
-            <p>
-                Behavioral biometrics enables continuous authentication by
-                monitoring user interaction patterns in real time.
-            </p>
+    <!-- CONTENT SECTION - FLOWS DIRECTLY WITHOUT BOX -->
+    <section class="content-display-section">
+        <div class="section-container">
+            <h2>Research Library</h2>
+            <p class="section-subtitle">Comprehensive collection of research materials and insights</p>
+
+            <div id="researchContent" class="content-flow">
+                <!-- Content will be dynamically loaded here -->
+            </div>
         </div>
     </section>
 
 </main>
-
-<!-- Modal -->
-<div id="textModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Your Entered Text</h3>
-            <span class="close-modal">&times;</span>
-        </div>
-        <div class="modal-body">
-            <div id="enteredTextDisplay" class="display-text"></div>
-        </div>
-    </div>
-</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
 
     const content = document.getElementById('researchContent');
     const researchNotes = document.getElementById('researchNotes');
-    const viewTextBtn = document.getElementById('viewTextBtn');
+    const saveTextBtn = document.getElementById('saveTextBtn');
     const clearTextBtn = document.getElementById('clearTextBtn');
-    const modal = document.getElementById('textModal');
-    const closeBtn = document.querySelector('.close-modal');
-    const enteredTextDisplay = document.getElementById('enteredTextDisplay');
+    const feedbackMessage = document.getElementById('feedback-message');
 
+<<<<<<< HEAD
     const paragraphs = [
         "Zero Trust Architecture enforces strict identity verification.",
     "Behavioral biometrics provides continuous authentication.",
@@ -162,31 +156,146 @@ document.addEventListener('DOMContentLoaded', () => {
     "Unauthorized access attempts are immediately flagged.",
     "Adaptive security policies evolve with emerging threats.",
     "Behavioral insights improve both usability and security."
+=======
+    // 50+ Lines of content for scrolling
+    const contentParagraphs = [
+        "Zero Trust Architecture is a modern security framework that fundamentally changes how organizations approach access control. Instead of trusting any user or device within a corporate network, Zero Trust requires continuous verification of identity and device posture before granting access to resources.",
+        
+        "Behavioral biometrics represents one of the most innovative advances in cybersecurity authentication methods. This technology monitors unique patterns in how users interact with their devices, including keystroke dynamics, mouse movements, and scrolling patterns, to continuously verify their identity.",
+        
+        "ZTNA (Zero Trust Network Access) reduces lateral movement risks by implementing microsegmentation of the network. Each resource is protected individually, requiring authentication at each step, preventing attackers from moving freely across the network once they gain entry.",
+        
+        "Keystroke and mouse dynamics enhance security by creating a unique biometric profile for each user. The pattern of how someone types, including their typing speed, rhythm, and accuracy, is nearly impossible to replicate, making it an excellent additional layer of security.",
+        
+        "Anomaly detection algorithms work continuously to identify unauthorized access patterns. Machine learning models learn normal user behavior over time and immediately flag unusual activities that deviate from established patterns, enabling rapid detection of compromised accounts.",
+        
+        "Continuous monitoring ensures real-time threat detection across all user activities and resource access. Rather than relying on periodic security audits, continuous monitoring provides immediate visibility into potential security incidents as they occur.",
+        
+        "Multi-factor authentication strengthens login security by requiring users to provide multiple forms of identification. Combining something you know (password), something you have (phone or security key), and something you are (biometrics) creates a robust defense against unauthorized access.",
+        
+        "Access is granted on a least-privilege basis, meaning users receive only the minimum permissions necessary to perform their job functions. This principle significantly reduces the potential damage if a user account is compromised, as attackers would have limited access to resources.",
+        
+        "Dynamic policy enforcement adapts to user behavior and contextual factors in real-time. Rather than static policies that apply uniformly, dynamic policies can increase or decrease access requirements based on factors like location, time of day, device health, and user behavior patterns.",
+        
+        "Device posture checks prevent compromised devices from connecting to corporate resources. Before granting access, the security system verifies that the device has the latest security patches, appropriate antivirus protection, and is running approved operating system versions.",
+        
+        "Session analysis detects suspicious activity patterns by examining how users interact with systems throughout their session. Changes in typical behavior, unusual access times, or access to sensitive resources outside normal patterns trigger investigation and potential session termination.",
+        
+        "Risk-based authentication improves overall security posture by adjusting authentication requirements based on assessed risk levels. Low-risk access attempts from familiar locations at normal times require minimal authentication, while high-risk attempts require additional verification steps.",
+        
+        "Adaptive access control mitigates insider threats by continuously monitoring user behavior for signs of malicious intent. Unusual access patterns, attempts to escalate privileges, or access to sensitive data outside normal workflows trigger alerts and potential access restrictions.",
+        
+        "Behavioral patterns help in early attack detection by establishing baselines of normal user activity. Deviations from these baselines, such as accessing unusual files or communicating with unexpected external systems, can indicate the early stages of a sophisticated attack.",
+        
+        "Granular segmentation limits unauthorized lateral movement by dividing the network into small, isolated segments. Each segment requires separate authentication, preventing an attacker who compromises one segment from automatically gaining access to other parts of the network.",
+        
+        "Context-aware policies enforce location and time restrictions by considering where and when access requests originate. Policies might restrict access to sensitive resources to business hours and company office locations, preventing access from unusual geographical locations at unusual times.",
+        
+        "Audit logs provide traceability for security incidents by recording detailed information about all authentication attempts, resource access, and policy violations. These logs enable investigators to reconstruct exactly what happened during a security incident and identify the affected resources.",
+        
+        "Automated alerts notify administrators of policy violations immediately when they occur. Rather than waiting for routine security reports, administrators are alerted in real-time to suspicious activities, enabling rapid response to potential incidents.",
+        
+        "Continuous verification replaces static perimeter defenses by requiring authentication at each step of the user journey. The traditional approach of securing the network perimeter is replaced with verification at every gate, whether that's application access, data access, or resource modification.",
+        
+        "Keystroke rhythms and mouse gestures strengthen user identity by leveraging unique behavioral characteristics. These biometric factors are difficult for attackers to replicate because they require not just the correct credentials, but also the exact behavioral patterns of the legitimate user.",
+        
+        "Real-time anomaly detection prevents account takeovers by identifying when an account is being accessed in ways inconsistent with normal usage patterns. If an attacker gains access through credential theft, their behavioral patterns would immediately reveal the compromise.",
+        
+        "Zero Trust ensures no implicit trust is given to devices or users, regardless of their location or network status. Every access request is treated as potentially suspicious until verified, eliminating the assumption that users within the corporate network are automatically trustworthy.",
+        
+        "Behavioral biometrics reduces the need for frequent password changes by providing continuous identity verification. Instead of relying solely on static passwords that users might write down or reuse across systems, behavioral verification provides an ongoing measure of user legitimacy.",
+        
+        "ZTNA ensures secure remote access without VPN risks by implementing fine-grained access controls for each application. Rather than granting broad network access like traditional VPNs, ZTNA provides access only to specific applications the user needs, minimizing the attack surface.",
+        
+        "Machine learning models analyze user behavior for threats by identifying patterns that humans might miss. These models continuously learn from millions of user interactions, identifying subtle signs of compromise or malicious intent that would be invisible to rule-based systems.",
+        
+        "Granular control over resources enhances overall security by allowing organizations to protect each asset individually. Rather than applying blanket security policies across entire departments, granular control enables customized protections based on the sensitivity and importance of specific resources.",
+        
+        "Continuous authentication protects sensitive applications by requiring periodic re-verification throughout a session. Rather than granting access once and maintaining it for the entire session, continuous authentication verifies the user remains the legitimate owner at intervals or before sensitive operations.",
+        
+        "Unauthorized access attempts are immediately flagged and investigated by security teams. Automated response systems can immediately revoke sessions, disable accounts, or initiate incident response procedures when unauthorized access is detected.",
+        
+        "Adaptive security policies evolve with emerging threats by incorporating threat intelligence and historical incident data. Security policies are continuously updated based on new attack techniques and patterns discovered in the wild, keeping defenses aligned with current threat landscape.",
+        
+        "Behavioral insights improve both usability and security by finding the balance between protection and user experience. Understanding normal user behavior enables creating security policies that are secure without being burdensome or frustrating to legitimate users.",
+        
+        "The integration of behavioral analytics with traditional security controls creates a comprehensive defense strategy. By combining network security, endpoint security, and behavioral monitoring, organizations can detect threats at multiple points in the attack chain.",
+        
+        "Identity-centric security approaches recognize that users are the primary target of modern attacks. By focusing security controls around protecting and monitoring user identities, rather than just network infrastructure, organizations address the actual threat vector used by most attacks.",
+        
+        "Cloud-native applications benefit significantly from Zero Trust principles by operating without assumption of network perimeter security. Applications deployed across multiple cloud providers and services can enforce consistent security policies regardless of underlying infrastructure.",
+        
+        "The principle of 'never trust, always verify' becomes operational reality through integrated identity management and access control systems. Every access request must be authenticated, authorized, and logged, creating an auditable trail of who accessed what and when.",
+        
+        "Risk scoring algorithms continuously evaluate the trustworthiness of each access request based on multiple factors. These algorithms consider user behavior, device health, network location, access patterns, and many other signals to assign a risk score that determines what additional authentication is required.",
+        
+        "Insider threat detection programs use behavioral analysis to identify employees whose actions deviate from their role-appropriate behavior. Employees who suddenly access sensitive files outside their department, work at unusual hours, or attempt privilege escalation are flagged for investigation.",
+        
+        "The principle of least-privilege access requires ongoing review and adjustment as user roles change. Security teams must regularly audit access permissions to ensure they remain aligned with current job responsibilities, revoking access no longer needed.",
+        
+        "Behavioral biometrics provides passive authentication that doesn't disrupt user workflows. Rather than requiring explicit authentication steps that slow down productivity, behavioral verification happens silently in the background, maintaining security without friction.",
+        
+        "Network segmentation implemented through ZTNA prevents the lateral movement that characterizes many advanced attacks. By requiring authentication at each network segment boundary, the attack surface is significantly reduced, limiting the value of any single compromised credential.",
+        
+        "Compliance requirements in regulated industries are increasingly emphasizing continuous monitoring and behavioral controls. Regulations like HIPAA, PCI-DSS, and GDPR expect organizations to implement controls that go beyond simple perimeter security to continuous identity verification.",
+        
+        "The human element remains critical even in automated security systems. Security analysts must monitor alerts, investigate anomalies, and make judgment calls about whether suspicious activity represents genuine threats or benign false positives.",
+        
+        "API security in Zero Trust environments requires the same continuous verification applied to user access. Every API call is authenticated, authorized, and logged, preventing unauthorized data access through service-to-service communication channels.",
+        
+        "Containerized applications deployed in Kubernetes environments require rethinking of access control strategies. Traditional network-based security doesn't apply effectively to container orchestration, requiring application-aware security policies and continuous verification.",
+        
+        "Privileged access management programs protect accounts with administrative rights, which are the most valuable targets for attackers. These programs implement strict controls, monitoring, and approval workflows around privileged account usage to prevent their compromise.",
+        
+        "Threat intelligence feeds automatically update security policies with information about current attack methods and known malicious actors. This enables proactive adjustment of security controls to address emerging threats before attackers can exploit known vulnerabilities.",
+        
+        "User and entity behavior analytics (UEBA) systems provide visibility into behavioral patterns at scale across entire organizations. Rather than analyzing individual users in isolation, UEBA enables comparison of user behavior against peer groups and organizational baselines.",
+        
+        "Encryption of data in transit and at rest complements behavioral authentication by protecting information even if access controls are bypassed. Multi-layered security ensures that even compromised credentials don't automatically grant access to unencrypted sensitive data.",
+        
+        "Incident response procedures in Zero Trust environments benefit from comprehensive audit logs generated by continuous monitoring. Detailed logs enable rapid investigation and containment of security incidents, reducing dwell time and limiting attacker impact.",
+        
+        "The shift from perimeter-based security to identity-based security represents a fundamental change in how organizations protect assets. This paradigm shift requires investment in identity infrastructure, behavioral analytics, and continuous monitoring capabilities."
+>>>>>>> 290f74f094b3ade72796a68af1f149a1e33ec4b2
     ];
 
-    paragraphs.forEach(text => {
+    // Dynamically add all paragraphs to content
+    contentParagraphs.forEach((text, index) => {
         const p = document.createElement('p');
         p.textContent = text;
+        p.className = 'content-paragraph';
         content.appendChild(p);
     });
 
-    viewTextBtn.addEventListener('click', () => {
-        enteredTextDisplay.textContent =
-            researchNotes.value || 'No text entered.';
-        modal.style.display = 'block';
+    // Save Notes button
+    saveTextBtn.addEventListener('click', () => {
+        const text = researchNotes.value.trim();
+        if (text) {
+            feedbackMessage.textContent = '✓ Notes saved successfully!';
+            feedbackMessage.classList.add('visible', 'success');
+            setTimeout(() => {
+                feedbackMessage.classList.remove('visible');
+            }, 3000);
+        } else {
+            feedbackMessage.textContent = '⚠ Please enter some notes before saving.';
+            feedbackMessage.classList.add('visible', 'warning');
+            setTimeout(() => {
+                feedbackMessage.classList.remove('visible');
+            }, 3000);
+        }
     });
 
-    closeBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
-
+    // Clear button
     clearTextBtn.addEventListener('click', () => {
-        researchNotes.value = '';
-    });
-
-    window.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.style.display = 'none';
+        if (researchNotes.value) {
+            if (confirm('Are you sure you want to clear all notes?')) {
+                researchNotes.value = '';
+                feedbackMessage.textContent = 'Notes cleared.';
+                feedbackMessage.classList.add('visible', 'info');
+                setTimeout(() => {
+                    feedbackMessage.classList.remove('visible');
+                }, 2000);
+            }
         }
     });
 });

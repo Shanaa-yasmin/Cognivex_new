@@ -1,20 +1,19 @@
-console.log("Behavior monitoring initialized");
+console.log("🎯 Behavior monitoring initialized");
 
 // ============================
 // CONFIGURATION
 // ============================
-const BATCH_SIZE = 150;
-const FLUSH_INTERVAL = 30000; // 30 seconds
-const MOUSE_THROTTLE_MS = 120;
+const BATCH_SIZE = 100;           // Flush when batch reaches 100 events
+const FLUSH_INTERVAL = 30000;     // Flush every 30 seconds
+const MOUSE_THROTTLE_MS = 200;    // Throttle mouse events to 200ms
 
 // ============================
-// STATE
+// STATE - Simple arrays to store events
 // ============================
-let keystrokes = [];
-let mouseMoves = [];
-let scrolls = [];
-
-let lastKeyTime = null;
+let keyEvents = [];               // Store actual key names pressed
+let mouseEvents = [];             // Store mouse movements and clicks
+let scrollEvents = [];            // Store scroll positions
+let userId = null;
 let isSending = false;
 let lastMouseTime = 0;
 
@@ -31,153 +30,292 @@ console.log("Cognivex Session ID:", SESSION_ID);
 
 // ============================
 // GET AUTHENTICATED USER
+// INITIALIZATION
 // ============================
-async function getUserId() {
-    const { data: { session }, error } =
-        await window.supabaseClient.auth.getSession();
+async function initBehaviorTracking() {
+    console.log("⏳ Waiting for Supabase and Auth...");
+    
+    const maxAttempts = 50;
+    let attempts = 0;
 
-    if (error || !session) return null;
-    return session.user.id;
+    return new Promise((resolve) => {
+        const checkReady = setInterval(async () => {
+            attempts++;
+            
+            if (window.supabaseClient && window.supabaseHelper) {
+                clearInterval(checkReady);
+                console.log("✓ Supabase ready, getting user ID...");
+                
+                userId = await window.supabaseHelper.getUserId();
+                
+                if (userId) {
+                    console.log("✓ User ID obtained:", userId);
+                    setupEventListeners();
+                    resolve(true);
+                } else {
+                    console.error("✗ Failed to get user ID");
+                    resolve(false);
+                }
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkReady);
+                console.error("✗ Supabase/Auth failed to initialize");
+                resolve(false);
+            }
+        }, 100);
+    });
 }
 
 // ============================
-// KEYSTROKE CAPTURE (NO RAW KEYS)
+// EVENT LISTENERS SETUP
 // ============================
-document.addEventListener("keydown", (e) => {
-    const now = Date.now();
+function setupEventListeners() {
+    console.log("📡 Setting up event listeners...");
 
-    if (lastKeyTime !== null) {
-        keystrokes.push({
-            key: e.key,
-            interval: now - lastKeyTime,
-            timestamp: new Date(now).toISOString()
+    // ============================
+    // KEYSTROKE CAPTURE - Store actual key names
+    // ============================
+    document.addEventListener("keydown", (e) => {
+        let keyName = e.key;
+        
+        // Convert common keys to readable names
+        if (keyName === ' ') keyName = 'SPACE';
+        if (keyName === 'Enter') keyName = 'ENTER';
+        if (keyName === 'Backspace') keyName = 'BACKSPACE';
+        if (keyName === 'Tab') keyName = 'TAB';
+        if (keyName === 'Shift') keyName = 'SHIFT';
+        if (keyName === 'Control') keyName = 'CTRL';
+        if (keyName === 'Alt') keyName = 'ALT';
+        if (keyName === 'Escape') keyName = 'ESC';
+        if (keyName === 'ArrowUp') keyName = 'ARROW_UP';
+        if (keyName === 'ArrowDown') keyName = 'ARROW_DOWN';
+        if (keyName === 'ArrowLeft') keyName = 'ARROW_LEFT';
+        if (keyName === 'ArrowRight') keyName = 'ARROW_RIGHT';
+
+        // Store the key event
+        keyEvents.push({
+            key: keyName,                    // The actual key name (a, b, c, ENTER, SPACE, etc)
+            timestamp: new Date().toISOString()
+        });
+
+        console.log("⌨️ Key pressed:", keyName);
+        flushIfNeeded();
+    });
+
+    // ============================
+    // MOUSE MOVEMENT (THROTTLED) - Store position changes
+    // ============================
+    document.addEventListener("mousemove", (e) => {
+        const now = Date.now();
+        if (now - lastMouseTime < MOUSE_THROTTLE_MS) return;
+
+        mouseEvents.push({
+            type: "MOVE",                    // Type of mouse event
+            x: e.clientX,                    // Horizontal position on screen
+            y: e.clientY,                    // Vertical position on screen
+            timestamp: new Date().toISOString()
+        });
+
+        lastMouseTime = now;
+        console.log("🖱️ Mouse moved to:", e.clientX, e.clientY);
+        flushIfNeeded();
+    }, { passive: true });
+
+    // ============================
+    // MOUSE CLICK CAPTURE - Store click locations
+    // ============================
+    document.addEventListener("click", (e) => {
+        mouseEvents.push({
+            type: "CLICK",                   // Type of mouse event
+            x: e.clientX,                    // Click X position
+            y: e.clientY,                    // Click Y position
+            element: e.target.tagName,       // What element was clicked (BUTTON, INPUT, etc)
+            timestamp: new Date().toISOString()
+        });
+
+        console.log("🖱️ Clicked:", e.target.tagName, "at", e.clientX, e.clientY);
+        flushIfNeeded();
+    });
+
+    // ============================
+    // SCROLL CAPTURE - Store scroll position
+    // ============================
+    window.addEventListener("scroll", () => {
+        scrollEvents.push({
+            type: "SCROLL",                  // Type of scroll
+            scrollY: window.scrollY,         // How far down the page (pixels)
+            scrollX: window.scrollX,         // How far right the page (pixels)
+            windowHeight: window.innerHeight,// Height of visible window
+            pageHeight: document.documentElement.scrollHeight,  // Total page height
+            scrollPercent: Math.round((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100),  // Percentage scrolled
+            timestamp: new Date().toISOString()
+        });
+
+        console.log("📜 Scroll position Y:", window.scrollY, "Percent:", Math.round((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100) + "%");
+        flushIfNeeded();
+    }, { passive: true });
+
+    // ============================
+    // TEXTAREA FOCUS/BLUR - Track user focus
+    // ============================
+    const textarea = document.getElementById('researchNotes');
+    if (textarea) {
+        textarea.addEventListener('focus', () => {
+            scrollEvents.push({
+                type: "FOCUS",                // User focused on textarea
+                element: "research_notes",
+                timestamp: new Date().toISOString()
+            });
+            console.log("📝 Research notes textarea FOCUSED");
+        });
+
+        textarea.addEventListener('blur', () => {
+            scrollEvents.push({
+                type: "BLUR",                 // User left textarea
+                element: "research_notes",
+                timestamp: new Date().toISOString()
+            });
+            console.log("📝 Research notes textarea BLURRED");
         });
     }
 
-    lastKeyTime = now;
-    flushIfNeeded();
-});
-
-// ============================
-// MOUSE MOVEMENT (THROTTLED)
-// ============================
-document.addEventListener("mousemove", (e) => {
-    const now = Date.now();
-    if (now - lastMouseTime < MOUSE_THROTTLE_MS) return;
-
-    mouseMoves.push({
-        dx: e.movementX,
-        dy: e.movementY,
-        timestamp: new Date(now).toISOString()
-    });
-
-    lastMouseTime = now;
-    flushIfNeeded();
-});
-
-// ============================
-// SCROLL CAPTURE
-// ============================
-document.addEventListener("scroll", () => {
-    scrolls.push({
-        scrollY: window.scrollY,
-        timestamp: new Date().toISOString()
-    });
-
-    flushIfNeeded();
-});
+    console.log("✓ Event listeners setup complete");
+}
 
 // ============================
 // FLUSH CONDITIONS
 // ============================
 function flushIfNeeded() {
-    const total =
-        keystrokes.length + mouseMoves.length + scrolls.length;
+    const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
 
     if (total >= BATCH_SIZE) {
+        console.log(`📤 Batch size (${total}) reached, flushing...`);
         flushToSupabase();
     }
 }
 
-// Time-based flush
+// Time-based flush every 30 seconds
 setInterval(() => {
-    if (
-        keystrokes.length ||
-        mouseMoves.length ||
-        scrolls.length
-    ) {
+    const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
+    
+    if (total > 0) {
+        console.log(`⏱️  Time-based flush triggered (${total} events)`);
         flushToSupabase();
     }
 }, FLUSH_INTERVAL);
 
 // ============================
-// STORE TO SUPABASE (SAFE)
+// STORE TO SUPABASE
 // ============================
 async function flushToSupabase() {
-    if (isSending) return;
+    if (isSending) {
+        console.log("⏳ Already sending, skipping flush...");
+        return;
+    }
 
-    if (
-        !keystrokes.length &&
-        !mouseMoves.length &&
-        !scrolls.length
-    ) return;
+    const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
+    
+    if (total === 0) {
+        return;
+    }
 
     isSending = true;
 
-    // Copy + clear immediately
-    const ks = [...keystrokes];
-    const mm = [...mouseMoves];
-    const sc = [...scrolls];
+    // Copy arrays immediately
+    const ke = [...keyEvents];
+    const me = [...mouseEvents];
+    const se = [...scrollEvents];
 
-    keystrokes = [];
-    mouseMoves = [];
-    scrolls = [];
+    // Clear original arrays (for next batch)
+    keyEvents = [];
+    mouseEvents = [];
+    scrollEvents = [];
 
     try {
-        const userId = await getUserId();
-        if (!userId) return;
+        // Get fresh user ID if not set
+        if (!userId) {
+            userId = await window.supabaseHelper.getUserId();
+        }
 
+        if (!userId) {
+            console.error("✗ Cannot flush: No user ID available");
+            // Restore data
+            keyEvents.unshift(...ke);
+            mouseEvents.unshift(...me);
+            scrollEvents.unshift(...se);
+            return;
+        }
+
+        // Build simple payload
         const payload = {
             user_id: userId,
-            session_id: SESSION_ID,
-            keystroke_data: ks.length ? ks : null,
-            mouse_data: mm.length ? mm : null,
-            scroll_data: sc.length ? sc : null,
-            metadata: {
-                keystroke_count: ks.length,
-                mouse_count: mm.length,
-                scroll_count: sc.length,
-                batch_size: ks.length + mm.length + sc.length,
-                user_agent: navigator.userAgent
+            key_events: ke.length > 0 ? ke : null,         // Only include if we have data
+            mouse_events: me.length > 0 ? me : null,       // Only include if we have data
+            scroll_events: se.length > 0 ? se : null,      // Only include if we have data
+            summary: {
+                total_keys_pressed: ke.length,
+                total_mouse_movements: me.filter(e => e.type === 'MOVE').length,
+                total_clicks: me.filter(e => e.type === 'CLICK').length,
+                total_scroll_events: se.filter(e => e.type === 'SCROLL').length,
+                total_events: ke.length + me.length + se.length,
+                timestamp: new Date().toISOString()
             }
         };
 
-        const { error } = await window.supabaseClient
-            .from("behavior_logs")
-            .insert([payload]);
+        console.log("📤 Sending behavior data to Supabase:", payload.summary);
 
-        if (error) throw error;
+        const result = await window.supabaseHelper.insertBehaviorData(payload);
 
-        console.log("✅ Behavior batch stored");
+        if (result.success) {
+            console.log("✓ Behavior batch stored successfully");
+        } else {
+            throw result.error;
+        }
 
     } catch (err) {
-        console.error("❌ Behavior insert failed:", err.message);
+        console.error("✗ Behavior insert failed:", err.message);
 
-        // Restore data if insert failed
-        keystrokes.unshift(...ks);
-        mouseMoves.unshift(...mm);
-        scrolls.unshift(...sc);
+        // Restore data if insert failed (will retry next time)
+        keyEvents.unshift(...ke);
+        mouseEvents.unshift(...me);
+        scrollEvents.unshift(...se);
 
     } finally {
         isSending = false;
     }
 }
 
+// Make flush function globally accessible
+window.flushBehaviorData = flushToSupabase;
+
 // ============================
-// FLUSH ON TAB HIDE / LOGOUT
+// FLUSH ON TAB HIDE / LOGOUT / PAGE UNLOAD
 // ============================
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+        console.log("👁️  Tab hidden, flushing behavior data...");
         flushToSupabase();
     }
 });
+
+// Flush on page unload
+window.addEventListener("beforeunload", () => {
+    console.log("🔄 Page unloading, flushing behavior data...");
+    flushToSupabase();
+});
+
+// ============================
+// START MONITORING
+// ============================
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("📄 DOM loaded, starting behavior monitoring...");
+    initBehaviorTracking();
+});
+
+// Fallback if DOM is already loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initBehaviorTracking();
+    });
+} else {
+    initBehaviorTracking();
+}
