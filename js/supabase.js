@@ -4,7 +4,8 @@ if (!window.supabaseClient) {
     const SUPABASE_URL = 'https://driblaepjoebknxymfzh.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_PqmcU2v1bs1B3ef-x22hiQ_nFNpRUhw';
 
-    window.supabaseClient = window.supabase.createClient(
+    // 'supabase' comes from the CDN loaded in HTML
+    window.supabaseClient = supabase.createClient(
         SUPABASE_URL,
         SUPABASE_ANON_KEY,
         {
@@ -16,7 +17,7 @@ if (!window.supabaseClient) {
         }
     );
 
-    console.log('Supabase client created');
+    console.log('Supabase client created successfully');
 } else {
     console.log('Supabase client already initialized');
 }

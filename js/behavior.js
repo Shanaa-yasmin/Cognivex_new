@@ -19,6 +19,17 @@ let isSending = false;
 let lastMouseTime = 0;
 
 // ============================
+// SESSION ID (ONE PER LOGIN)
+// ============================
+let SESSION_ID = localStorage.getItem("SESSION_ID");
+if (!SESSION_ID) {
+    SESSION_ID = crypto.randomUUID();
+    localStorage.setItem("SESSION_ID", SESSION_ID);
+}
+console.log("Cognivex Session ID:", SESSION_ID);
+
+
+// ============================
 // GET AUTHENTICATED USER
 // ============================
 async function getUserId() {
@@ -128,6 +139,7 @@ async function flushToSupabase() {
 
         const payload = {
             user_id: userId,
+            session_id: SESSION_ID,
             keystroke_data: ks.length ? ks : null,
             mouse_data: mm.length ? mm : null,
             scroll_data: sc.length ? sc : null,
