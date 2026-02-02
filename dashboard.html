@@ -51,9 +51,16 @@
                         console.log('Authenticated session detected.');
 
                         // Load behavioral monitoring only after auth
-                        const script = document.createElement('script');
-                        script.src = 'js/behavior.js';
-                        document.body.appendChild(script);
+                        // Load feature extraction FIRST (it needs to be available)
+                        const featureScript = document.createElement('script');
+                        featureScript.src = 'js/feature_extraction.js';
+                        featureScript.onload = () => {
+                            // Load behavior monitoring AFTER feature extraction is ready
+                            const behaviorScript = document.createElement('script');
+                            behaviorScript.src = 'js/behavior.js';
+                            document.body.appendChild(behaviorScript);
+                        };
+                        document.body.appendChild(featureScript);
 
                     } catch (err) {
                         console.error('Dashboard auth error:', err);
@@ -74,7 +81,8 @@
         <span>Session Active – Behavioral Monitoring Enabled</span>
     </div>
 
-    <button class="btn btn-text" onclick="window.authHandler.logout()">Sign Out</button>
+    <button class="btn btn-text" id="logoutBtn">Sign Out</button>
+
 </header>
 
 <main class="dashboard-main">
@@ -163,41 +171,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         "Behavioral biometrics represents one of the most innovative advances in cybersecurity authentication methods. This technology monitors unique patterns in how users interact with their devices, including keystroke dynamics, mouse movements, and scrolling patterns, to continuously verify their identity.",
         
-        "ZTNA (Zero Trust Network Access) reduces lateral movement risks by implementing microsegmentation of the network. Each resource is protected individually, requiring authentication at each step, preventing attackers from moving freely across the network once they gain entry.",
+        "The principle of 'never trust, always verify' is the foundation of Zero Trust Network Architecture (ZTNA), which replaces traditional perimeter-based security with identity-centric access controls. Rather than assuming all traffic within a corporate network is safe, ZTNA treats every connection as potentially untrusted until verified.",
         
-        "Keystroke and mouse dynamics enhance security by creating a unique biometric profile for each user. The pattern of how someone types, including their typing speed, rhythm, and accuracy, is nearly impossible to replicate, making it an excellent additional layer of security.",
+        "Keystroke dynamics form a biometric signature as unique as fingerprints, measuring factors like the time between key presses, pressure applied to keys, and the rhythm of typing patterns. Machine learning algorithms can identify when someone other than the legitimate user is typing, enabling real-time anomaly detection.",
         
-        "Anomaly detection algorithms work continuously to identify unauthorized access patterns. Machine learning models learn normal user behavior over time and immediately flag unusual activities that deviate from established patterns, enabling rapid detection of compromised accounts.",
+        "Mouse movement patterns reveal behavioral characteristics that are difficult for attackers to replicate, including acceleration, velocity, and trajectory curves during clicking actions. These patterns remain consistent for legitimate users while immediately revealing when someone new is controlling the mouse.",
         
-        "Continuous monitoring ensures real-time threat detection across all user activities and resource access. Rather than relying on periodic security audits, continuous monitoring provides immediate visibility into potential security incidents as they occur.",
+        "Continuous authentication shifts from a single login event to ongoing verification throughout the user session. Rather than trusting a user for the entire day after one successful login, continuous authentication challenges the user's identity periodically and before sensitive operations.",
         
-        "Multi-factor authentication strengthens login security by requiring users to provide multiple forms of identification. Combining something you know (password), something you have (phone or security key), and something you are (biometrics) creates a robust defense against unauthorized access.",
+        "Network segmentation in Zero Trust environments prevents lateral movement by requiring authentication at each network boundary. If an attacker compromises one device on the network, they cannot automatically access all other systems, limiting the blast radius of any single compromise.",
         
-        "Access is granted on a least-privilege basis, meaning users receive only the minimum permissions necessary to perform their job functions. This principle significantly reduces the potential damage if a user account is compromised, as attackers would have limited access to resources.",
+        "User risk scoring algorithms evaluate multiple factors including device health, network location, user behavior patterns, and access patterns to assign a risk level to each access request. Higher-risk scenarios can trigger additional authentication challenges, adaptive access policies, or access denial.",
         
-        "Dynamic policy enforcement adapts to user behavior and contextual factors in real-time. Rather than static policies that apply uniformly, dynamic policies can increase or decrease access requirements based on factors like location, time of day, device health, and user behavior patterns.",
-        
-        "Device posture checks prevent compromised devices from connecting to corporate resources. Before granting access, the security system verifies that the device has the latest security patches, appropriate antivirus protection, and is running approved operating system versions.",
-        
-        "Session analysis detects suspicious activity patterns by examining how users interact with systems throughout their session. Changes in typical behavior, unusual access times, or access to sensitive resources outside normal patterns trigger investigation and potential session termination.",
-        
-        "Risk-based authentication improves overall security posture by adjusting authentication requirements based on assessed risk levels. Low-risk access attempts from familiar locations at normal times require minimal authentication, while high-risk attempts require additional verification steps.",
-        
-        "Adaptive access control mitigates insider threats by continuously monitoring user behavior for signs of malicious intent. Unusual access patterns, attempts to escalate privileges, or access to sensitive data outside normal workflows trigger alerts and potential access restrictions.",
-        
-        "Behavioral patterns help in early attack detection by establishing baselines of normal user activity. Deviations from these baselines, such as accessing unusual files or communicating with unexpected external systems, can indicate the early stages of a sophisticated attack.",
-        
-        "Granular segmentation limits unauthorized lateral movement by dividing the network into small, isolated segments. Each segment requires separate authentication, preventing an attacker who compromises one segment from automatically gaining access to other parts of the network.",
-        
-        "Context-aware policies enforce location and time restrictions by considering where and when access requests originate. Policies might restrict access to sensitive resources to business hours and company office locations, preventing access from unusual geographical locations at unusual times.",
-        
-        "Audit logs provide traceability for security incidents by recording detailed information about all authentication attempts, resource access, and policy violations. These logs enable investigators to reconstruct exactly what happened during a security incident and identify the affected resources.",
-        
-        "Automated alerts notify administrators of policy violations immediately when they occur. Rather than waiting for routine security reports, administrators are alerted in real-time to suspicious activities, enabling rapid response to potential incidents.",
-        
-        "Continuous verification replaces static perimeter defenses by requiring authentication at each step of the user journey. The traditional approach of securing the network perimeter is replaced with verification at every gate, whether that's application access, data access, or resource modification.",
-        
-        "Keystroke rhythms and mouse gestures strengthen user identity by leveraging unique behavioral characteristics. These biometric factors are difficult for attackers to replicate because they require not just the correct credentials, but also the exact behavioral patterns of the legitimate user.",
+        "Privilege escalation attempts are immediately detected and blocked by behavioral analysis monitoring for access patterns inconsistent with the user's normal role. Employees attempting to access systems outside their department or with escalated privileges trigger automatic review and potential investigation.",
         
         "Real-time anomaly detection prevents account takeovers by identifying when an account is being accessed in ways inconsistent with normal usage patterns. If an attacker gains access through credential theft, their behavioral patterns would immediately reveal the compromise.",
         
@@ -299,6 +285,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+</script>
+
+<script>
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        console.log("🔄 Logout initiated, saving session features...");
+
+        // Wait for all scripts to load (behavior.js and feature_extraction.js)
+        let attempts = 0;
+        while (!window.saveSessionFeatures && attempts < 50) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        // Save ONE summarized feature row for this session
+        if (typeof window.saveSessionFeatures === "function") {
+          await window.saveSessionFeatures();
+          console.log("✅ Session features saved successfully");
+        } else {
+          console.warn("⚠️ saveSessionFeatures function not available");
+        }
+
+      } catch (err) {
+        console.error("❌ Error saving session features:", err);
+      } finally {
+        // Always logout regardless of feature save status
+        if (window.authHandler) {
+          await window.authHandler.logout();
+        }
+      }
+    });
+  }
 </script>
 
 </body>

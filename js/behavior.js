@@ -42,23 +42,23 @@ async function initBehaviorTracking() {
         const checkReady = setInterval(async () => {
             attempts++;
             
-            if (window.supabaseClient && window.supabaseHelper) {
+            if (window.supabaseClient && window.supabaseHelper && window.extractBehaviorFeatures) {
                 clearInterval(checkReady);
-                console.log("✓ Supabase ready, getting user ID...");
+                console.log("✅ Supabase ready, getting user ID...");
                 
                 userId = await window.supabaseHelper.getUserId();
                 
                 if (userId) {
-                    console.log("✓ User ID obtained:", userId);
+                    console.log("✅ User ID obtained:", userId);
                     setupEventListeners();
                     resolve(true);
                 } else {
-                    console.error("✗ Failed to get user ID");
+                    console.error("❌ Failed to get user ID");
                     resolve(false);
                 }
             } else if (attempts >= maxAttempts) {
                 clearInterval(checkReady);
-                console.error("✗ Supabase/Auth failed to initialize");
+                console.error("❌ Supabase/Auth/Features failed to initialize");
                 resolve(false);
             }
         }, 100);
@@ -178,7 +178,7 @@ function setupEventListeners() {
         });
     }
 
-    console.log("✓ Event listeners setup complete");
+    console.log("✅ Event listeners setup complete");
 }
 
 // ============================
@@ -198,13 +198,13 @@ setInterval(() => {
     const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
     
     if (total > 0) {
-        console.log(`⏱️  Time-based flush triggered (${total} events)`);
+        console.log(`⏱️ Time-based flush triggered (${total} events)`);
         flushToSupabase();
     }
 }, FLUSH_INTERVAL);
 
 // ============================
-// STORE TO SUPABASE
+// STORE RAW BEHAVIOR DATA TO SUPABASE
 // ============================
 async function flushToSupabase() {
     if (isSending) {
@@ -215,6 +215,7 @@ async function flushToSupabase() {
     const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
     
     if (total === 0) {
+        console.log("ℹ️ No events to flush");
         return;
     }
 
@@ -225,11 +226,6 @@ async function flushToSupabase() {
     const me = [...mouseEvents];
     const se = [...scrollEvents];
 
-    // Clear original arrays (for next batch)
-    keyEvents = [];
-    mouseEvents = [];
-    scrollEvents = [];
-
     try {
         // Get fresh user ID if not set
         if (!userId) {
@@ -237,7 +233,7 @@ async function flushToSupabase() {
         }
 
         if (!userId) {
-            console.error("✗ Cannot flush: No user ID available");
+            console.error("❌ Cannot flush: No user ID available");
             // Restore data
             keyEvents.unshift(...ke);
             mouseEvents.unshift(...me);
@@ -245,7 +241,23 @@ async function flushToSupabase() {
             return;
         }
 
-        // Build simple payload
+        // ============================
+        // STEP 1: EXTRACT WINDOW FEATURES (for accumulation only)
+        // ============================
+        const windowFeatures = window.extractBehaviorFeatures(ke, me, se);
+        console.log("📊 Window features extracted:", windowFeatures);
+
+        if (!windowFeatures) {
+            console.warn("⚠️ Feature extraction returned null, skipping this flush");
+            keyEvents.unshift(...ke);
+            mouseEvents.unshift(...me);
+            scrollEvents.unshift(...se);
+            return;
+        }
+
+        // ============================
+        // STEP 2: STORE RAW BEHAVIOR DATA ONLY (NOT individual features)
+        // ============================
         const payload = {
             user_id: userId,
             key_events: ke.length > 0 ? ke : null,         // Only include if we have data
@@ -265,14 +277,21 @@ async function flushToSupabase() {
 
         const result = await window.supabaseHelper.insertBehaviorData(payload);
 
-        if (result.success) {
-            console.log("✓ Behavior batch stored successfully");
-        } else {
-            throw result.error;
+        if (!result.success) {
+            throw new Error(result.error?.message || "Failed to insert behavior data");
         }
 
+        console.log("✅ Behavior batch stored successfully");
+
+        // ============================
+        // STEP 3: CLEAR ARRAYS ONLY IF ALL SUCCESSFUL
+        // ============================
+        keyEvents = [];
+        mouseEvents = [];
+        scrollEvents = [];
+
     } catch (err) {
-        console.error("✗ Behavior insert failed:", err.message);
+        console.error("❌ Behavior insert failed:", err.message);
 
         // Restore data if insert failed (will retry next time)
         keyEvents.unshift(...ke);
@@ -288,18 +307,65 @@ async function flushToSupabase() {
 window.flushBehaviorData = flushToSupabase;
 
 // ============================
-// FLUSH ON TAB HIDE / LOGOUT / PAGE UNLOAD
+// SAVE SESSION FEATURES ON LOGOUT
+// ============================
+async function saveSessionFeatures() {
+    console.log("💾 Saving session features on logout...");
+
+    // First, flush any remaining behavior data
+    await flushToSupabase();
+
+    // Get the session summary
+    const sessionSummary = window.getSessionSummary();
+
+    if (!sessionSummary) {
+        console.warn("⚠️ No session summary to save");
+        return;
+    }
+
+    if (!userId) {
+        userId = await window.supabaseHelper.getUserId();
+    }
+
+    if (!userId) {
+        console.error("❌ Cannot save features: No user ID");
+        return;
+    }
+
+    try {
+        // Store aggregated session features to behavior_features table
+        const featureResult = await window.supabaseHelper.insertBehaviorFeatures(userId, sessionSummary);
+
+        if (!featureResult.success) {
+            throw new Error(featureResult.error?.message || "Failed to insert features");
+        }
+
+        console.log("✅ Session features stored successfully:", sessionSummary);
+
+        // Reset session for next login
+        window.resetSession();
+
+    } catch (err) {
+        console.error("❌ Session features insert failed:", err.message);
+    }
+}
+
+// Make save function globally accessible
+window.saveSessionFeatures = saveSessionFeatures;
+
+// ============================
+// FLUSH ON TAB HIDE / PAGE UNLOAD
 // ============================
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
-        console.log("👁️  Tab hidden, flushing behavior data...");
+        console.log("👁️ Tab hidden, flushing behavior data...");
         flushToSupabase();
     }
 });
 
-// Flush on page unload
+// Flush on page unload (but NOT features - that's done on logout)
 window.addEventListener("beforeunload", () => {
-    console.log("🔄 Page unloading, flushing behavior data...");
+    console.log("📄 Page unloading, flushing behavior data...");
     flushToSupabase();
 });
 

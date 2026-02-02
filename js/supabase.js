@@ -18,10 +18,9 @@ if (!window.supabaseClient) {
     );
     console.log('✓ Supabase client created successfully');
 } else {
-    console.log('✓ Supabase client already initialized');
+    console.log('✅ Supabase client already initialized');
 }
 
-// Helper function to insert data into Supabase
 window.supabaseHelper = {
     async insertBehaviorData(data) {
         try {
@@ -31,31 +30,40 @@ window.supabaseHelper = {
                 .insert([data]);
 
             if (error) throw error;
-            console.log('✓ Behavior data inserted:', result);
+            console.log('✅ behavior_logs inserted');
             return { success: true, result };
         } catch (error) {
-            console.error('✗ Failed to insert behavior data:', error.message);
+            console.error('❌ behavior_logs insert failed:', error.message);
             return { success: false, error };
         }
     },
 
-    async insertResearchNotes(notes, userId) {
+    async insertBehaviorFeatures(userId, features) {
         try {
             const supabase = window.supabaseClient;
+            
             const { data: result, error } = await supabase
-                .from('research_notes')
+                .from('behavior_features')
                 .insert([{
                     user_id: userId,
-                    content: notes,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    session_id: features.session_id,
+                    typing_speed: features.typing_speed,
+                    backspace_ratio: features.backspace_ratio,
+                    avg_keystroke_interval: features.avg_keystroke_interval,
+                    keystroke_variance: features.keystroke_variance,
+                    avg_mouse_speed: features.avg_mouse_speed,
+                    mouse_move_variance: features.mouse_move_variance,
+                    scroll_frequency: features.scroll_frequency,
+                    idle_ratio: features.idle_ratio,
+                    total_windows: features.total_windows,
+                    generated_at: features.generated_at
                 }]);
 
             if (error) throw error;
-            console.log('✓ Research notes saved:', result);
+            console.log('✅ behavior_features inserted');
             return { success: true, result };
         } catch (error) {
-            console.error('✗ Failed to save research notes:', error.message);
+            console.error('❌ behavior_features insert failed:', error.message);
             return { success: false, error };
         }
     },
@@ -66,13 +74,13 @@ window.supabaseHelper = {
             const { data: { session }, error } = await supabase.auth.getSession();
             
             if (error || !session) {
-                console.warn('No active session');
+                console.warn('⚠️ No active session');
                 return null;
             }
             
             return session.user.id;
         } catch (error) {
-            console.error('Error getting user ID:', error);
+            console.error('❌ Error getting user ID:', error);
             return null;
         }
     }
