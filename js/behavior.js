@@ -1,64 +1,59 @@
-console.log("🎯 Behavior monitoring initialized");
+console.log("Behavior monitoring initialized (v2 - backend-driven)");
 
 // ============================
 // CONFIGURATION
 // ============================
-const BATCH_SIZE = 100;           // Flush when batch reaches 100 events
-const FLUSH_INTERVAL = 30000;     // Flush every 30 seconds
-const MOUSE_THROTTLE_MS = 200;    // Throttle mouse events to 200ms
+const BACKEND_URL = "http://localhost:8000";
+const FLUSH_INTERVAL = 30000;    // 30 seconds
+const MOUSE_THROTTLE_MS = 200;
 
 // ============================
-// STATE - Simple arrays to store events
+// STATE
 // ============================
-let keyEvents = [];               // Store actual key names pressed
-let mouseEvents = [];             // Store mouse movements and clicks
-let scrollEvents = [];            // Store scroll positions
+let keyEvents = [];
+let mouseEvents = [];
+let scrollEvents = [];
 let userId = null;
 let isSending = false;
 let lastMouseTime = 0;
+let monitoringActive = true;
+let otpPending = false;
+let sessionEndSent = false;
+let snapshotsSentCount = 0;  // Track how many snapshots were successfully sent
 
 // ============================
-// SESSION ID (ONE PER LOGIN)
+// SESSION ID (FRESH EVERY LOGIN)
 // ============================
-let SESSION_ID = localStorage.getItem("SESSION_ID");
-if (!SESSION_ID) {
-    SESSION_ID = crypto.randomUUID();
-    localStorage.setItem("SESSION_ID", SESSION_ID);
-}
+let SESSION_ID = crypto.randomUUID();
+localStorage.setItem("SESSION_ID", SESSION_ID);
 console.log("Cognivex Session ID:", SESSION_ID);
 
-
 // ============================
-// GET AUTHENTICATED USER
 // INITIALIZATION
 // ============================
 async function initBehaviorTracking() {
-    console.log("⏳ Waiting for Supabase and Auth...");
-    
+    console.log("Waiting for Supabase and Auth...");
     const maxAttempts = 50;
     let attempts = 0;
 
     return new Promise((resolve) => {
         const checkReady = setInterval(async () => {
             attempts++;
-            
-            if (window.supabaseClient && window.supabaseHelper && window.extractBehaviorFeatures) {
+            if (window.supabaseClient && window.supabaseHelper) {
                 clearInterval(checkReady);
-                console.log("✅ Supabase ready, getting user ID...");
-                
                 userId = await window.supabaseHelper.getUserId();
-                
                 if (userId) {
-                    console.log("✅ User ID obtained:", userId);
+                    console.log("User ID obtained:", userId);
                     setupEventListeners();
+                    startSnapshotTimer();
                     resolve(true);
                 } else {
-                    console.error("❌ Failed to get user ID");
+                    console.error("Failed to get user ID");
                     resolve(false);
                 }
             } else if (attempts >= maxAttempts) {
                 clearInterval(checkReady);
-                console.error("❌ Supabase/Auth/Features failed to initialize");
+                console.error("Supabase/Auth failed to initialize");
                 resolve(false);
             }
         }, 100);
@@ -66,203 +61,130 @@ async function initBehaviorTracking() {
 }
 
 // ============================
-// EVENT LISTENERS SETUP
+// EVENT LISTENERS
 // ============================
 function setupEventListeners() {
-    console.log("📡 Setting up event listeners...");
+    console.log("Setting up event listeners...");
 
-    // ============================
-    // KEYSTROKE CAPTURE - Store actual key names
-    // ============================
+    // FIX: Split into keydown + keyup listeners.
+    // - Both include a "type" field so feature_extractor.py can filter keyups correctly.
+    // - Use e.key directly (no remapping) — JS already gives "Backspace", "Enter", etc.
+    //   which is exactly what feature_extractor.py expects.
     document.addEventListener("keydown", (e) => {
-        let keyName = e.key;
-        
-        // Convert common keys to readable names
-        if (keyName === ' ') keyName = 'SPACE';
-        if (keyName === 'Enter') keyName = 'ENTER';
-        if (keyName === 'Backspace') keyName = 'BACKSPACE';
-        if (keyName === 'Tab') keyName = 'TAB';
-        if (keyName === 'Shift') keyName = 'SHIFT';
-        if (keyName === 'Control') keyName = 'CTRL';
-        if (keyName === 'Alt') keyName = 'ALT';
-        if (keyName === 'Escape') keyName = 'ESC';
-        if (keyName === 'ArrowUp') keyName = 'ARROW_UP';
-        if (keyName === 'ArrowDown') keyName = 'ARROW_DOWN';
-        if (keyName === 'ArrowLeft') keyName = 'ARROW_LEFT';
-        if (keyName === 'ArrowRight') keyName = 'ARROW_RIGHT';
-
-        // Store the key event
+        if (!monitoringActive) return;
         keyEvents.push({
-            key: keyName,                    // The actual key name (a, b, c, ENTER, SPACE, etc)
+            type: "keydown",
+            key: e.key,
             timestamp: new Date().toISOString()
         });
-
-        console.log("⌨️ Key pressed:", keyName);
-        flushIfNeeded();
     });
 
-    // ============================
-    // MOUSE MOVEMENT (THROTTLED) - Store position changes
-    // ============================
+    document.addEventListener("keyup", (e) => {
+        if (!monitoringActive) return;
+        keyEvents.push({
+            type: "keyup",
+            key: e.key,
+            timestamp: new Date().toISOString()
+        });
+    });
+
     document.addEventListener("mousemove", (e) => {
+        if (!monitoringActive) return;
         const now = Date.now();
         if (now - lastMouseTime < MOUSE_THROTTLE_MS) return;
-
         mouseEvents.push({
-            type: "MOVE",                    // Type of mouse event
-            x: e.clientX,                    // Horizontal position on screen
-            y: e.clientY,                    // Vertical position on screen
+            type: "MOVE", x: e.clientX, y: e.clientY,
             timestamp: new Date().toISOString()
         });
-
         lastMouseTime = now;
-        console.log("🖱️ Mouse moved to:", e.clientX, e.clientY);
-        flushIfNeeded();
     }, { passive: true });
 
-    // ============================
-    // MOUSE CLICK CAPTURE - Store click locations
-    // ============================
     document.addEventListener("click", (e) => {
+        if (!monitoringActive) return;
         mouseEvents.push({
-            type: "CLICK",                   // Type of mouse event
-            x: e.clientX,                    // Click X position
-            y: e.clientY,                    // Click Y position
-            element: e.target.tagName,       // What element was clicked (BUTTON, INPUT, etc)
-            timestamp: new Date().toISOString()
+            type: "CLICK", x: e.clientX, y: e.clientY,
+            element: e.target.tagName, timestamp: new Date().toISOString()
         });
-
-        console.log("🖱️ Clicked:", e.target.tagName, "at", e.clientX, e.clientY);
-        flushIfNeeded();
     });
 
-    // ============================
-    // SCROLL CAPTURE - Store scroll position
-    // ============================
     window.addEventListener("scroll", () => {
+        if (!monitoringActive) return;
         scrollEvents.push({
-            type: "SCROLL",                  // Type of scroll
-            scrollY: window.scrollY,         // How far down the page (pixels)
-            scrollX: window.scrollX,         // How far right the page (pixels)
-            windowHeight: window.innerHeight,// Height of visible window
-            pageHeight: document.documentElement.scrollHeight,  // Total page height
-            scrollPercent: Math.round((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100),  // Percentage scrolled
+            type: "SCROLL",
+            scrollY: window.scrollY, scrollX: window.scrollX,
+            windowHeight: window.innerHeight,
+            pageHeight: document.documentElement.scrollHeight,
+            scrollPercent: Math.round(
+                (window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight)) * 100
+            ),
             timestamp: new Date().toISOString()
         });
-
-        console.log("📜 Scroll position Y:", window.scrollY, "Percent:", Math.round((window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)) * 100) + "%");
-        flushIfNeeded();
     }, { passive: true });
 
-    // ============================
-    // TEXTAREA FOCUS/BLUR - Track user focus
-    // ============================
     const textarea = document.getElementById('researchNotes');
     if (textarea) {
         textarea.addEventListener('focus', () => {
-            scrollEvents.push({
-                type: "FOCUS",                // User focused on textarea
-                element: "research_notes",
-                timestamp: new Date().toISOString()
-            });
-            console.log("📝 Research notes textarea FOCUSED");
+            scrollEvents.push({ type: "FOCUS", element: "research_notes", timestamp: new Date().toISOString() });
         });
-
         textarea.addEventListener('blur', () => {
-            scrollEvents.push({
-                type: "BLUR",                 // User left textarea
-                element: "research_notes",
-                timestamp: new Date().toISOString()
-            });
-            console.log("📝 Research notes textarea BLURRED");
+            scrollEvents.push({ type: "BLUR", element: "research_notes", timestamp: new Date().toISOString() });
         });
     }
 
-    console.log("✅ Event listeners setup complete");
+    console.log("Event listeners setup complete");
 }
 
 // ============================
-// FLUSH CONDITIONS
+// 30-SECOND SNAPSHOT TIMER
 // ============================
-function flushIfNeeded() {
-    const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
+let snapshotTimer = null;
 
-    if (total >= BATCH_SIZE) {
-        console.log(`📤 Batch size (${total}) reached, flushing...`);
-        flushToSupabase();
-    }
+function startSnapshotTimer() {
+    snapshotTimer = setInterval(() => {
+        if (otpPending) return;
+        const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
+        if (total > 0) {
+            console.log("30s snapshot triggered (" + total + " events)");
+            sendSnapshotToBackend();
+        }
+    }, FLUSH_INTERVAL);
 }
 
-// Time-based flush every 30 seconds
-setInterval(() => {
-    const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
-    
-    if (total > 0) {
-        console.log(`⏱️ Time-based flush triggered (${total} events)`);
-        flushToSupabase();
-    }
-}, FLUSH_INTERVAL);
-
 // ============================
-// STORE RAW BEHAVIOR DATA TO SUPABASE
+// SEND SNAPSHOT TO BACKEND
 // ============================
-async function flushToSupabase() {
-    if (isSending) {
-        console.log("⏳ Already sending, skipping flush...");
-        return;
-    }
+async function sendSnapshotToBackend() {
+    if (isSending || !monitoringActive) return;
 
     const total = keyEvents.length + mouseEvents.length + scrollEvents.length;
-    
-    if (total === 0) {
-        console.log("ℹ️ No events to flush");
-        return;
-    }
+    if (total === 0) return;
 
     isSending = true;
 
-    // Copy arrays immediately
     const ke = [...keyEvents];
     const me = [...mouseEvents];
     const se = [...scrollEvents];
+    keyEvents = [];
+    mouseEvents = [];
+    scrollEvents = [];
 
     try {
-        // Get fresh user ID if not set
         if (!userId) {
             userId = await window.supabaseHelper.getUserId();
         }
-
         if (!userId) {
-            console.error("❌ Cannot flush: No user ID available");
-            // Restore data
             keyEvents.unshift(...ke);
             mouseEvents.unshift(...me);
             scrollEvents.unshift(...se);
             return;
         }
 
-        // ============================
-        // STEP 1: EXTRACT WINDOW FEATURES (for accumulation only)
-        // ============================
-        const windowFeatures = window.extractBehaviorFeatures(ke, me, se);
-        console.log("📊 Window features extracted:", windowFeatures);
-
-        if (!windowFeatures) {
-            console.warn("⚠️ Feature extraction returned null, skipping this flush");
-            keyEvents.unshift(...ke);
-            mouseEvents.unshift(...me);
-            scrollEvents.unshift(...se);
-            return;
-        }
-
-        // ============================
-        // STEP 2: STORE RAW BEHAVIOR DATA ONLY (NOT individual features)
-        // ============================
         const payload = {
             user_id: userId,
-            key_events: ke.length > 0 ? ke : null,         // Only include if we have data
-            mouse_events: me.length > 0 ? me : null,       // Only include if we have data
-            scroll_events: se.length > 0 ? se : null,      // Only include if we have data
+            session_id: SESSION_ID,
+            key_events: ke.length > 0 ? ke : [],
+            mouse_events: me.length > 0 ? me : [],
+            scroll_events: se.length > 0 ? se : [],
             summary: {
                 total_keys_pressed: ke.length,
                 total_mouse_movements: me.filter(e => e.type === 'MOVE').length,
@@ -273,115 +195,260 @@ async function flushToSupabase() {
             }
         };
 
-        console.log("📤 Sending behavior data to Supabase:", payload.summary);
+        console.log("Sending snapshot to backend...", payload.summary);
 
-        const result = await window.supabaseHelper.insertBehaviorData(payload);
+        const response = await fetch(BACKEND_URL + "/session/snapshot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
 
-        if (!result.success) {
-            throw new Error(result.error?.message || "Failed to insert behavior data");
+        if (!response.ok) {
+            throw new Error("Backend returned " + response.status);
         }
 
-        console.log("✅ Behavior batch stored successfully");
+        const result = await response.json();
+        console.log("Backend response:", result);
+        snapshotsSentCount++;
 
-        // ============================
-        // STEP 3: CLEAR ARRAYS ONLY IF ALL SUCCESSFUL
-        // ============================
-        keyEvents = [];
-        mouseEvents = [];
-        scrollEvents = [];
+        handleRiskResponse(result);
 
     } catch (err) {
-        console.error("❌ Behavior insert failed:", err.message);
-
-        // Restore data if insert failed (will retry next time)
+        console.error("Snapshot send failed:", err.message);
         keyEvents.unshift(...ke);
         mouseEvents.unshift(...me);
         scrollEvents.unshift(...se);
-
     } finally {
         isSending = false;
     }
 }
 
-// Make flush function globally accessible
-window.flushBehaviorData = flushToSupabase;
-
 // ============================
-// SAVE SESSION FEATURES ON LOGOUT
+// RISK RESPONSE HANDLER
 // ============================
-async function saveSessionFeatures() {
-    console.log("💾 Saving session features on logout...");
+function handleRiskResponse(result) {
+    const statusDot = document.querySelector('.status-dot');
+    const statusText = document.querySelector('.status-indicator span:last-child');
 
-    // First, flush any remaining behavior data
-    await flushToSupabase();
+    switch (result.status) {
+        case "OK":
+        case "COLLECTING_DATA":
+            if (statusDot) statusDot.style.background = '#10b981';
+            if (statusText) statusText.textContent = 'Session Active - Behavioral Monitoring Enabled';
+            break;
 
-    // Get the session summary
-    const sessionSummary = window.getSessionSummary();
+        case "OTP_REQUIRED":
+            console.warn("MEDIUM risk detected - OTP required");
+            if (statusDot) statusDot.style.background = '#f59e0b';
+            if (statusText) statusText.textContent = 'Identity Verification Required';
+            showOTPDialog(result.session_id);
+            break;
 
-    if (!sessionSummary) {
-        console.warn("⚠️ No session summary to save");
-        return;
-    }
-
-    if (!userId) {
-        userId = await window.supabaseHelper.getUserId();
-    }
-
-    if (!userId) {
-        console.error("❌ Cannot save features: No user ID");
-        return;
-    }
-
-    try {
-        // Store aggregated session features to behavior_features table
-        const featureResult = await window.supabaseHelper.insertBehaviorFeatures(userId, sessionSummary);
-
-        if (!featureResult.success) {
-            throw new Error(featureResult.error?.message || "Failed to insert features");
-        }
-
-        console.log("✅ Session features stored successfully:", sessionSummary);
-
-        // Reset session for next login
-        window.resetSession();
-
-    } catch (err) {
-        console.error("❌ Session features insert failed:", err.message);
+        case "SESSION_TERMINATED":
+            console.error("HIGH risk - session terminated");
+            if (statusDot) statusDot.style.background = '#ef4444';
+            if (statusText) statusText.textContent = 'Session Terminated - Anomaly Detected';
+            forceLogout("Behavioral anomaly detected. Session terminated.");
+            break;
     }
 }
 
-// Make save function globally accessible
-window.saveSessionFeatures = saveSessionFeatures;
+// ============================
+// OTP DIALOG
+// ============================
+function showOTPDialog(sessionId) {
+    otpPending = true;
+
+    let modal = document.getElementById('otpModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'otpModal';
+        modal.innerHTML = '<div class="otp-overlay">' +
+            '<div class="otp-dialog">' +
+            '<h3>Identity Verification</h3>' +
+            '<p>Unusual behavior detected. Please enter the verification code to continue.</p>' +
+            '<p class="otp-hint">Code: <strong>2323</strong></p>' +
+            '<input type="text" id="otpInput" maxlength="4" placeholder="Enter code" autocomplete="off" />' +
+            '<div class="otp-buttons">' +
+            '<button id="otpSubmitBtn" class="btn btn-primary">Verify</button>' +
+            '</div>' +
+            '<p id="otpError" class="otp-error"></p>' +
+            '<p class="otp-timer">Expires in <span id="otpCountdown">15</span>s</p>' +
+            '</div></div>';
+        document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'block';
+    document.getElementById('otpInput').value = '';
+    document.getElementById('otpError').textContent = '';
+
+    var seconds = 15;
+    var countdownEl = document.getElementById('otpCountdown');
+    var countdown = setInterval(function() {
+        seconds--;
+        if (countdownEl) countdownEl.textContent = seconds;
+        if (seconds <= 0) {
+            clearInterval(countdown);
+            closeOTPDialog();
+            forceLogout("Verification timed out. Session terminated.");
+        }
+    }, 1000);
+
+    var submitBtn = document.getElementById('otpSubmitBtn');
+    var inputEl = document.getElementById('otpInput');
+
+    var doSubmit = async function() {
+        var code = inputEl.value.trim();
+        if (!code) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying...';
+
+        try {
+            var resp = await fetch(BACKEND_URL + "/verify-otp", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: userId,
+                    session_id: sessionId,
+                    otp_code: code,
+                }),
+            });
+
+            var result = await resp.json();
+            console.log("OTP verification result:", result);
+
+            if (result.status === "OTP_VERIFIED") {
+                clearInterval(countdown);
+                closeOTPDialog();
+                var dot = document.querySelector('.status-dot');
+                var txt = document.querySelector('.status-indicator span:last-child');
+                if (dot) dot.style.background = '#10b981';
+                if (txt) txt.textContent = 'Session Active - Identity Verified';
+            } else {
+                clearInterval(countdown);
+                closeOTPDialog();
+                forceLogout("Verification failed. Session terminated.");
+            }
+        } catch (err) {
+            console.error("OTP verification error:", err);
+            document.getElementById('otpError').textContent = 'Verification failed. Try again.';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Verify';
+        }
+    };
+
+    submitBtn.onclick = doSubmit;
+    inputEl.onkeydown = function(e) { if (e.key === 'Enter') doSubmit(); };
+}
+
+function closeOTPDialog() {
+    var modal = document.getElementById('otpModal');
+    if (modal) modal.style.display = 'none';
+    otpPending = false;
+}
 
 // ============================
-// FLUSH ON TAB HIDE / PAGE UNLOAD
+// FORCE LOGOUT
 // ============================
-document.addEventListener("visibilitychange", () => {
+function forceLogout(reason) {
+    monitoringActive = false;
+    if (snapshotTimer) clearInterval(snapshotTimer);
+    alert(reason);
+    localStorage.removeItem("SESSION_ID");
+    if (window.authHandler) {
+        window.authHandler.logout();
+    } else {
+        window.location.href = 'index.html';
+    }
+}
+
+// ============================
+// SESSION END (called on logout)
+// ============================
+async function sendSessionEnd() {
+    if (sessionEndSent) {
+        console.log("Session-end already sent, skipping.");
+        return { status: "ALREADY_SENT" };
+    }
+    sessionEndSent = true;
+    monitoringActive = false;
+    if (snapshotTimer) clearInterval(snapshotTimer);
+    console.log("Sending session-end to backend for session:", SESSION_ID);
+
+    try {
+        await sendSnapshotToBackend();
+    } catch (e) {
+        console.warn("Final snapshot flush failed:", e.message);
+    }
+
+    if (snapshotsSentCount === 0) {
+        console.log("No snapshots sent this session, skipping session-end.");
+        localStorage.removeItem("SESSION_ID");
+        return { status: "NO_DATA" };
+    }
+
+    if (!userId) {
+        try { userId = await window.supabaseHelper.getUserId(); } catch(e) {}
+    }
+    if (!userId) {
+        console.error("Cannot send session-end: No user ID");
+        return { status: "NO_USER" };
+    }
+
+    var endPayload = JSON.stringify({ user_id: userId, session_id: SESSION_ID });
+
+    try {
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 8000);
+
+        var resp = await fetch(BACKEND_URL + "/session/end", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: endPayload,
+            signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        var result = await resp.json();
+        console.log("Session-end response:", result);
+        localStorage.removeItem("SESSION_ID");
+        return result;
+    } catch (err) {
+        console.error("Session-end fetch failed, using beacon fallback:", err.message);
+        navigator.sendBeacon(
+            BACKEND_URL + "/session/end",
+            new Blob([endPayload], { type: "application/json" })
+        );
+        localStorage.removeItem("SESSION_ID");
+        return { status: "BEACON_SENT" };
+    }
+}
+
+// Global exports
+window.sendSessionEnd = sendSessionEnd;
+window.flushBehaviorData = sendSnapshotToBackend;
+
+// Flush on tab hide
+document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "hidden") {
-        console.log("👁️ Tab hidden, flushing behavior data...");
-        flushToSupabase();
+        sendSnapshotToBackend();
     }
 });
 
-// Flush on page unload (but NOT features - that's done on logout)
-window.addEventListener("beforeunload", () => {
-    console.log("📄 Page unloading, flushing behavior data...");
-    flushToSupabase();
+// Session-end beacon on page unload
+window.addEventListener("beforeunload", function() {
+    if (userId && SESSION_ID && !sessionEndSent && snapshotsSentCount > 0) {
+        sessionEndSent = true;
+        var payload = JSON.stringify({ user_id: userId, session_id: SESSION_ID });
+        navigator.sendBeacon(BACKEND_URL + "/session/end", new Blob([payload], { type: "application/json" }));
+    }
 });
 
-// ============================
-// START MONITORING
-// ============================
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("📄 DOM loaded, starting behavior monitoring...");
-    initBehaviorTracking();
-});
-
-// Fallback if DOM is already loaded
+// Start monitoring
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initBehaviorTracking();
-    });
+    document.addEventListener('DOMContentLoaded', function() { initBehaviorTracking(); });
 } else {
     initBehaviorTracking();
 }

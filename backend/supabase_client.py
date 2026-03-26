@@ -26,15 +26,16 @@ def get_client() -> Client:
 # BEHAVIOR LOGS
 # ──────────────────────────────────────────────
 
-def insert_behavior_log(user_id: str, session_id: str, key_events, mouse_events, scroll_events, summary) -> dict:
+def insert_behavior_log(user_id: str, session_id: str,
+                        key_events, mouse_events, scroll_events, summary) -> dict:
     """Insert a 30-sec snapshot into behavior_logs. Returns the inserted row."""
     row = {
-        "user_id": user_id,
-        "session_id": session_id,
-        "key_events": key_events,
+        "user_id":      user_id,
+        "session_id":   session_id,
+        "key_events":   key_events,
         "mouse_events": mouse_events,
-        "scroll_events": scroll_events,
-        "summary": summary,
+        "scroll_events":scroll_events,
+        "summary":      summary,
     }
     resp = _client.table("behavior_logs").insert(row).execute()
     return resp.data[0] if resp.data else {}
@@ -93,18 +94,18 @@ def count_user_logs(user_id: str) -> int:
 def insert_behavior_features(user_id: str, session_id: str, features: dict) -> dict:
     """Insert one aggregated feature row at session end."""
     row = {
-        "user_id": user_id,
-        "session_id": session_id,
-        "typing_speed": features["typing_speed"],
-        "backspace_ratio": features["backspace_ratio"],
+        "user_id":                user_id,
+        "session_id":             session_id,
+        "typing_speed":           features["typing_speed"],
+        "backspace_ratio":        features["backspace_ratio"],
         "avg_keystroke_interval": features["avg_keystroke_interval"],
-        "keystroke_variance": features["keystroke_variance"],
-        "avg_mouse_speed": features["avg_mouse_speed"],
-        "mouse_move_variance": features["mouse_move_variance"],
-        "scroll_frequency": features["scroll_frequency"],
-        "idle_ratio": features["idle_ratio"],
-        "total_windows": features.get("total_windows", 1),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "keystroke_variance":     features["keystroke_variance"],
+        "avg_mouse_speed":        features["avg_mouse_speed"],
+        "mouse_move_variance":    features["mouse_move_variance"],
+        "scroll_frequency":       features["scroll_frequency"],
+        "idle_ratio":             features["idle_ratio"],
+        "total_windows":          features.get("total_windows", 1),
+        "generated_at":           datetime.now(timezone.utc).isoformat(),
     }
     resp = _client.table("behavior_features").insert(row).execute()
     return resp.data[0] if resp.data else {}
@@ -147,7 +148,7 @@ def fetch_latest_features(user_id: str, limit: int = 15) -> list[dict]:
 
 
 # ──────────────────────────────────────────────
-# MODEL METADATA
+# MODEL METADATA  (includes adaptive thresholds)
 # ──────────────────────────────────────────────
 
 def get_model_metadata(user_id: str) -> dict | None:
@@ -162,21 +163,40 @@ def get_model_metadata(user_id: str) -> dict | None:
     return resp.data[0] if resp.data else None
 
 
-def upsert_model_metadata(user_id: str, model_bytes: bytes, model_version: int,
-                           total_sessions: int, last_trained_count: int,
-                           feature_columns: list[str] | None = None) -> dict:
-    """Insert or update the model metadata for a user."""
+def upsert_model_metadata(
+    user_id: str,
+    model_bytes: bytes,
+    model_version: int,
+    total_sessions: int,
+    last_trained_count: int,
+    feature_columns: list[str] | None = None,
+    medium_threshold: float | None = None,   # NEW — adaptive threshold
+    high_threshold: float | None = None,     # NEW — adaptive threshold
+    training_metrics: dict | None = None,
+) -> dict:
+    """
+    Insert or update the model metadata for a user.
+    Now persists adaptive thresholds computed from training score distribution.
+    """
     existing = get_model_metadata(user_id)
 
     row = {
-        "user_id": user_id,
-        "model_version": model_version,
-        "model_binary": model_bytes.hex(),  # actual DB column name
-        "feature_columns": feature_columns or [],
-        "total_sessions": total_sessions,
+        "user_id":            user_id,
+        "model_version":      model_version,
+        "model_binary":       model_bytes.hex(),
+        "feature_columns":    feature_columns or [],
+        "total_sessions":     total_sessions,
         "last_trained_count": last_trained_count,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at":         datetime.now(timezone.utc).isoformat(),
     }
+
+    # Only include threshold columns if values were provided
+    if medium_threshold is not None:
+        row["medium_threshold"] = medium_threshold
+    if high_threshold is not None:
+        row["high_threshold"] = high_threshold
+    if training_metrics is not None:
+        row["training_metrics"] = training_metrics
 
     if existing:
         resp = (
@@ -196,11 +216,21 @@ def get_model_bytes(user_id: str) -> tuple[bytes | None, int | None]:
     meta = get_model_metadata(user_id)
     if not meta:
         return None, None
-    # Try model_binary first (actual DB column), fallback to model_bytes
     raw = meta.get("model_binary") or meta.get("model_bytes")
     if raw is None:
         return None, None
     return bytes.fromhex(raw), meta.get("model_version")
+
+
+def get_adaptive_thresholds(user_id: str) -> tuple[float | None, float | None]:
+    """
+    Return (medium_threshold, high_threshold) stored from last training.
+    Returns (None, None) if not yet computed (model not trained yet).
+    """
+    meta = get_model_metadata(user_id)
+    if not meta:
+        return None, None
+    return meta.get("medium_threshold"), meta.get("high_threshold")
 
 
 # ──────────────────────────────────────────────
@@ -208,15 +238,15 @@ def get_model_bytes(user_id: str) -> tuple[bytes | None, int | None]:
 # ──────────────────────────────────────────────
 
 def create_otp_challenge(user_id: str, session_id: str) -> dict:
-    """Create a new OTP challenge with 15-second expiry."""
+    """Create a new OTP challenge with 2-minute expiry."""
     now = datetime.now(timezone.utc)
     row = {
-        "user_id": user_id,
+        "user_id":    user_id,
         "session_id": session_id,
-        "otp_code": "2323",
-        "status": "PENDING",
+        "otp_code":   "2323",
+        "status":     "PENDING",
         "created_at": now.isoformat(),
-        "expires_at": (now + timedelta(seconds=15)).isoformat(),
+        "expires_at": (now + timedelta(minutes=2)).isoformat(),
     }
     resp = _client.table("otp_challenges").insert(row).execute()
     return resp.data[0] if resp.data else {}
@@ -250,6 +280,7 @@ def sliding_window_cleanup(user_id: str, max_logs: int = 500):
     """
     If user has > max_logs behavior_logs rows, delete the oldest ones
     and their corresponding behavior_features rows.
+    Maintains referential integrity: features deleted before logs.
     """
     total = count_user_logs(user_id)
     if total <= max_logs:
@@ -257,7 +288,6 @@ def sliding_window_cleanup(user_id: str, max_logs: int = 500):
 
     excess = total - max_logs
 
-    # Fetch the oldest `excess` rows
     resp = (
         _client.table("behavior_logs")
         .select("id, session_id")
@@ -286,11 +316,10 @@ def sliding_window_cleanup(user_id: str, max_logs: int = 500):
 # ──────────────────────────────────────────────
 
 def get_user_status(user_id: str) -> dict:
-    """Return model version, total sessions, last risk level."""
+    """Return model version, total sessions, last risk level, and current thresholds."""
     meta = get_model_metadata(user_id)
     total_sessions = count_user_features(user_id)
 
-    # Last risk level from most recent behavior_logs row
     resp = (
         _client.table("behavior_logs")
         .select("risk_level")
@@ -302,7 +331,10 @@ def get_user_status(user_id: str) -> dict:
     last_risk = resp.data[0]["risk_level"] if resp.data else None
 
     return {
-        "model_version": meta["model_version"] if meta else None,
-        "total_sessions": total_sessions,
-        "last_risk_level": last_risk,
+        "model_version":      meta["model_version"] if meta else None,
+        "total_sessions":     total_sessions,
+        "last_risk_level":    last_risk,
+        # Surface the adaptive thresholds so you can inspect them via /status
+        "medium_threshold":   meta.get("medium_threshold") if meta else None,
+        "high_threshold":     meta.get("high_threshold") if meta else None,
     }

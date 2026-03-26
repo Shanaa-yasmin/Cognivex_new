@@ -1,21 +1,4 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Cognivex</title>
-</head>
-<body>
-
-<!-- Supabase CDN (ONLY here) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.33.1/dist/supabase.min.js"></script>
-
-<!-- Your JS files -->
-<script src="js/supabase.js"></script>
-<script src="js/behavior.js"></script>
-
-</body>
-</html>
-
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -50,17 +33,10 @@
 
                         console.log('Authenticated session detected.');
 
-                        // Load behavioral monitoring only after auth
-                        // Load feature extraction FIRST (it needs to be available)
-                        const featureScript = document.createElement('script');
-                        featureScript.src = 'js/feature_extraction.js';
-                        featureScript.onload = () => {
-                            // Load behavior monitoring AFTER feature extraction is ready
-                            const behaviorScript = document.createElement('script');
-                            behaviorScript.src = 'js/behavior.js';
-                            document.body.appendChild(behaviorScript);
-                        };
-                        document.body.appendChild(featureScript);
+                        // Load behavioral monitoring after auth
+                        const behaviorScript = document.createElement('script');
+                        behaviorScript.src = 'js/behavior.js';
+                        document.body.appendChild(behaviorScript);
 
                     } catch (err) {
                         console.error('Dashboard auth error:', err);
@@ -132,7 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearTextBtn = document.getElementById('clearTextBtn');
     const feedbackMessage = document.getElementById('feedback-message');
 
-<<<<<<< HEAD
     const paragraphs = [
         "Zero Trust Architecture enforces strict identity verification.",
     "Behavioral biometrics provides continuous authentication.",
@@ -164,89 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
     "Unauthorized access attempts are immediately flagged.",
     "Adaptive security policies evolve with emerging threats.",
     "Behavioral insights improve both usability and security."
-=======
-    // 50+ Lines of content for scrolling
-    const contentParagraphs = [
-        "Zero Trust Architecture is a modern security framework that fundamentally changes how organizations approach access control. Instead of trusting any user or device within a corporate network, Zero Trust requires continuous verification of identity and device posture before granting access to resources.",
-        
-        "Behavioral biometrics represents one of the most innovative advances in cybersecurity authentication methods. This technology monitors unique patterns in how users interact with their devices, including keystroke dynamics, mouse movements, and scrolling patterns, to continuously verify their identity.",
-        
-        "The principle of 'never trust, always verify' is the foundation of Zero Trust Network Architecture (ZTNA), which replaces traditional perimeter-based security with identity-centric access controls. Rather than assuming all traffic within a corporate network is safe, ZTNA treats every connection as potentially untrusted until verified.",
-        
-        "Keystroke dynamics form a biometric signature as unique as fingerprints, measuring factors like the time between key presses, pressure applied to keys, and the rhythm of typing patterns. Machine learning algorithms can identify when someone other than the legitimate user is typing, enabling real-time anomaly detection.",
-        
-        "Mouse movement patterns reveal behavioral characteristics that are difficult for attackers to replicate, including acceleration, velocity, and trajectory curves during clicking actions. These patterns remain consistent for legitimate users while immediately revealing when someone new is controlling the mouse.",
-        
-        "Continuous authentication shifts from a single login event to ongoing verification throughout the user session. Rather than trusting a user for the entire day after one successful login, continuous authentication challenges the user's identity periodically and before sensitive operations.",
-        
-        "Network segmentation in Zero Trust environments prevents lateral movement by requiring authentication at each network boundary. If an attacker compromises one device on the network, they cannot automatically access all other systems, limiting the blast radius of any single compromise.",
-        
-        "User risk scoring algorithms evaluate multiple factors including device health, network location, user behavior patterns, and access patterns to assign a risk level to each access request. Higher-risk scenarios can trigger additional authentication challenges, adaptive access policies, or access denial.",
-        
-        "Privilege escalation attempts are immediately detected and blocked by behavioral analysis monitoring for access patterns inconsistent with the user's normal role. Employees attempting to access systems outside their department or with escalated privileges trigger automatic review and potential investigation.",
-        
-        "Real-time anomaly detection prevents account takeovers by identifying when an account is being accessed in ways inconsistent with normal usage patterns. If an attacker gains access through credential theft, their behavioral patterns would immediately reveal the compromise.",
-        
-        "Zero Trust ensures no implicit trust is given to devices or users, regardless of their location or network status. Every access request is treated as potentially suspicious until verified, eliminating the assumption that users within the corporate network are automatically trustworthy.",
-        
-        "Behavioral biometrics reduces the need for frequent password changes by providing continuous identity verification. Instead of relying solely on static passwords that users might write down or reuse across systems, behavioral verification provides an ongoing measure of user legitimacy.",
-        
-        "ZTNA ensures secure remote access without VPN risks by implementing fine-grained access controls for each application. Rather than granting broad network access like traditional VPNs, ZTNA provides access only to specific applications the user needs, minimizing the attack surface.",
-        
-        "Machine learning models analyze user behavior for threats by identifying patterns that humans might miss. These models continuously learn from millions of user interactions, identifying subtle signs of compromise or malicious intent that would be invisible to rule-based systems.",
-        
-        "Granular control over resources enhances overall security by allowing organizations to protect each asset individually. Rather than applying blanket security policies across entire departments, granular control enables customized protections based on the sensitivity and importance of specific resources.",
-        
-        "Continuous authentication protects sensitive applications by requiring periodic re-verification throughout a session. Rather than granting access once and maintaining it for the entire session, continuous authentication verifies the user remains the legitimate owner at intervals or before sensitive operations.",
-        
-        "Unauthorized access attempts are immediately flagged and investigated by security teams. Automated response systems can immediately revoke sessions, disable accounts, or initiate incident response procedures when unauthorized access is detected.",
-        
-        "Adaptive security policies evolve with emerging threats by incorporating threat intelligence and historical incident data. Security policies are continuously updated based on new attack techniques and patterns discovered in the wild, keeping defenses aligned with current threat landscape.",
-        
-        "Behavioral insights improve both usability and security by finding the balance between protection and user experience. Understanding normal user behavior enables creating security policies that are secure without being burdensome or frustrating to legitimate users.",
-        
-        "The integration of behavioral analytics with traditional security controls creates a comprehensive defense strategy. By combining network security, endpoint security, and behavioral monitoring, organizations can detect threats at multiple points in the attack chain.",
-        
-        "Identity-centric security approaches recognize that users are the primary target of modern attacks. By focusing security controls around protecting and monitoring user identities, rather than just network infrastructure, organizations address the actual threat vector used by most attacks.",
-        
-        "Cloud-native applications benefit significantly from Zero Trust principles by operating without assumption of network perimeter security. Applications deployed across multiple cloud providers and services can enforce consistent security policies regardless of underlying infrastructure.",
-        
-        "The principle of 'never trust, always verify' becomes operational reality through integrated identity management and access control systems. Every access request must be authenticated, authorized, and logged, creating an auditable trail of who accessed what and when.",
-        
-        "Risk scoring algorithms continuously evaluate the trustworthiness of each access request based on multiple factors. These algorithms consider user behavior, device health, network location, access patterns, and many other signals to assign a risk score that determines what additional authentication is required.",
-        
-        "Insider threat detection programs use behavioral analysis to identify employees whose actions deviate from their role-appropriate behavior. Employees who suddenly access sensitive files outside their department, work at unusual hours, or attempt privilege escalation are flagged for investigation.",
-        
-        "The principle of least-privilege access requires ongoing review and adjustment as user roles change. Security teams must regularly audit access permissions to ensure they remain aligned with current job responsibilities, revoking access no longer needed.",
-        
-        "Behavioral biometrics provides passive authentication that doesn't disrupt user workflows. Rather than requiring explicit authentication steps that slow down productivity, behavioral verification happens silently in the background, maintaining security without friction.",
-        
-        "Network segmentation implemented through ZTNA prevents the lateral movement that characterizes many advanced attacks. By requiring authentication at each network segment boundary, the attack surface is significantly reduced, limiting the value of any single compromised credential.",
-        
-        "Compliance requirements in regulated industries are increasingly emphasizing continuous monitoring and behavioral controls. Regulations like HIPAA, PCI-DSS, and GDPR expect organizations to implement controls that go beyond simple perimeter security to continuous identity verification.",
-        
-        "The human element remains critical even in automated security systems. Security analysts must monitor alerts, investigate anomalies, and make judgment calls about whether suspicious activity represents genuine threats or benign false positives.",
-        
-        "API security in Zero Trust environments requires the same continuous verification applied to user access. Every API call is authenticated, authorized, and logged, preventing unauthorized data access through service-to-service communication channels.",
-        
-        "Containerized applications deployed in Kubernetes environments require rethinking of access control strategies. Traditional network-based security doesn't apply effectively to container orchestration, requiring application-aware security policies and continuous verification.",
-        
-        "Privileged access management programs protect accounts with administrative rights, which are the most valuable targets for attackers. These programs implement strict controls, monitoring, and approval workflows around privileged account usage to prevent their compromise.",
-        
-        "Threat intelligence feeds automatically update security policies with information about current attack methods and known malicious actors. This enables proactive adjustment of security controls to address emerging threats before attackers can exploit known vulnerabilities.",
-        
-        "User and entity behavior analytics (UEBA) systems provide visibility into behavioral patterns at scale across entire organizations. Rather than analyzing individual users in isolation, UEBA enables comparison of user behavior against peer groups and organizational baselines.",
-        
-        "Encryption of data in transit and at rest complements behavioral authentication by protecting information even if access controls are bypassed. Multi-layered security ensures that even compromised credentials don't automatically grant access to unencrypted sensitive data.",
-        
-        "Incident response procedures in Zero Trust environments benefit from comprehensive audit logs generated by continuous monitoring. Detailed logs enable rapid investigation and containment of security incidents, reducing dwell time and limiting attacker impact.",
-        
-        "The shift from perimeter-based security to identity-based security represents a fundamental change in how organizations protect assets. This paradigm shift requires investment in identity infrastructure, behavioral analytics, and continuous monitoring capabilities."
->>>>>>> 290f74f094b3ade72796a68af1f149a1e33ec4b2
     ];
 
     // Dynamically add all paragraphs to content
-    contentParagraphs.forEach((text, index) => {
+    paragraphs.forEach((text, index) => {
         const p = document.createElement('p');
         p.textContent = text;
         p.className = 'content-paragraph';
@@ -292,32 +188,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
-      try {
-        console.log("🔄 Logout initiated, saving session features...");
+      // Disable the button immediately to prevent double-clicks
+      logoutBtn.disabled = true;
+      logoutBtn.textContent = "Signing out...";
 
-        // Wait for all scripts to load (behavior.js and feature_extraction.js)
+      try {
+        console.log("Logout initiated, sending session-end...");
+
+        // Wait for behavior.js to load (up to 5s)
         let attempts = 0;
-        while (!window.saveSessionFeatures && attempts < 50) {
+        while (!window.sendSessionEnd && attempts < 50) {
           await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
         }
 
-        // Save ONE summarized feature row for this session
-        if (typeof window.saveSessionFeatures === "function") {
-          await window.saveSessionFeatures();
-          console.log("✅ Session features saved successfully");
+        // Send session-end and WAIT for it to complete before logging out
+        if (typeof window.sendSessionEnd === "function") {
+          var result = await window.sendSessionEnd();
+          console.log("Session-end completed:", result);
         } else {
-          console.warn("⚠️ saveSessionFeatures function not available");
+          console.warn("sendSessionEnd function not available");
         }
 
       } catch (err) {
-        console.error("❌ Error saving session features:", err);
-      } finally {
-        // Always logout regardless of feature save status
+        console.error("Error during session-end:", err);
+      }
+
+      // Only now do the actual Supabase logout + redirect
+      try {
         if (window.authHandler) {
           await window.authHandler.logout();
         }
+      } catch (err) {
+        console.error("Auth logout error:", err);
       }
+      // Fallback redirect in case authHandler.logout doesn't redirect
+      window.location.href = 'index.html';
     });
   }
 </script>
