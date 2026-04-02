@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cognivex — Sign In</title>
+  <title>Cognivex — Create Account</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -22,6 +22,7 @@
       --bg:       #f4f4f7;
       --mono:     'DM Mono', monospace;
       --sans:     'DM Sans', sans-serif;
+      --ease:     cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     html, body {
@@ -32,6 +33,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
+    /* ── Layout ─────────────────────────────────────── */
     .page {
       min-height: 100vh;
       display: grid;
@@ -69,7 +71,10 @@
       pointer-events: none;
     }
 
-    .panel-left-content { position: relative; z-index: 1; }
+    .panel-left-content {
+      position: relative;
+      z-index: 1;
+    }
 
     .brand {
       font-family: var(--mono);
@@ -89,7 +94,10 @@
       letter-spacing: -0.02em;
     }
 
-    .panel-headline strong { font-weight: 500; display: block; }
+    .panel-headline strong {
+      font-weight: 500;
+      display: block;
+    }
 
     .panel-desc {
       margin-top: 1.5rem;
@@ -172,7 +180,9 @@
     }
 
     /* ── Fields ─────────────────────────────────────── */
-    .field { margin-bottom: 1.25rem; }
+    .field {
+      margin-bottom: 1.25rem;
+    }
 
     .field label {
       display: block;
@@ -206,6 +216,38 @@
       box-shadow: 0 0 0 3px rgba(42,92,255,0.08);
     }
 
+    .field input.error {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(229,57,53,0.08);
+    }
+
+    /* password strength bar */
+    .strength-wrap {
+      margin-top: 0.5rem;
+      display: flex;
+      gap: 4px;
+    }
+
+    .strength-bar {
+      height: 3px;
+      flex: 1;
+      border-radius: 2px;
+      background: var(--line);
+      transition: background 0.3s;
+    }
+
+    .strength-bar.active-weak   { background: #e53935; }
+    .strength-bar.active-fair   { background: #fb8c00; }
+    .strength-bar.active-good   { background: #43a047; }
+    .strength-bar.active-strong { background: #1a9e5c; }
+
+    .strength-label {
+      font-size: 0.7rem;
+      color: var(--ink-3);
+      margin-top: 0.35rem;
+      min-height: 1rem;
+    }
+
     /* ── Submit button ───────────────────────────────── */
     .btn-submit {
       width: 100%;
@@ -220,11 +262,13 @@
       border: none;
       border-radius: 8px;
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.15s, transform 0.1s;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      transition: background 0.15s, transform 0.1s;
     }
 
     .btn-submit:hover:not(:disabled) { background: var(--accent-2); }
@@ -246,7 +290,7 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Alert ───────────────────────────────────────── */
+    /* ── Alerts ─────────────────────────────────────── */
     .alert {
       padding: 0.75rem 1rem;
       border-radius: 8px;
@@ -264,7 +308,13 @@
       color: var(--danger);
     }
 
-    /* ── Divider & switch ────────────────────────────── */
+    .alert-success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: var(--success);
+    }
+
+    /* ── Divider ─────────────────────────────────────── */
     .divider {
       display: flex;
       align-items: center;
@@ -274,13 +324,15 @@
       font-size: 0.75rem;
     }
 
-    .divider::before, .divider::after {
+    .divider::before,
+    .divider::after {
       content: '';
       flex: 1;
       height: 1px;
       background: var(--line);
     }
 
+    /* ── Switch link ─────────────────────────────────── */
     .switch-text {
       text-align: center;
       font-size: 0.825rem;
@@ -294,6 +346,43 @@
     }
 
     .switch-text a:hover { text-decoration: underline; }
+
+    /* ── Success state ───────────────────────────────── */
+    .success-state {
+      display: none;
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    .success-state.visible { display: block; }
+
+    .success-icon {
+      width: 56px;
+      height: 56px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+    }
+
+    .success-icon svg { color: var(--success); }
+
+    .success-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .success-msg {
+      font-size: 0.875rem;
+      color: var(--ink-3);
+      line-height: 1.6;
+      margin-bottom: 1.75rem;
+    }
 
     /* ── Responsive ──────────────────────────────────── */
     @media (max-width: 768px) {
@@ -313,12 +402,12 @@
     <div class="panel-left-content">
       <div class="brand">Cognivex</div>
       <p class="panel-headline">
-        Invisible<br>
-        <strong>Identity<br>Verification</strong>
+        Continuous<br>
+        <strong>Behavioral<br>Authentication</strong>
       </p>
       <p class="panel-desc">
-        Your behavior is your credential.
-        Continuous authentication without interruption.
+        Your typing rhythm and mouse movement are your password.
+        No tokens. No friction.
       </p>
       <ul class="feature-list">
         <li>Invisible continuous verification</li>
@@ -334,13 +423,16 @@
   <div class="panel-right">
     <div class="form-card">
 
-      <p class="form-eyebrow">Welcome back</p>
-      <h1 class="form-title">Sign in</h1>
-      <p class="form-subtitle">Enter your credentials to continue.</p>
+      <p class="form-eyebrow">New account</p>
+      <h1 class="form-title">Create account</h1>
+      <p class="form-subtitle">Enter your details to get started.</p>
 
+      <!-- Alerts -->
       <div id="alertError" class="alert alert-error" role="alert"></div>
+      <div id="alertSuccess" class="alert alert-success" role="alert"></div>
 
-      <form id="loginForm" novalidate>
+      <!-- Form -->
+      <form id="signupForm" novalidate>
 
         <div class="field">
           <label for="email">Email address</label>
@@ -349,20 +441,44 @@
 
         <div class="field">
           <label for="password">Password</label>
-          <input type="password" id="password" placeholder="Your password" autocomplete="current-password" required>
+          <input type="password" id="password" placeholder="Min. 8 characters" autocomplete="new-password" required>
+          <div class="strength-wrap" id="strengthBars">
+            <div class="strength-bar" id="bar1"></div>
+            <div class="strength-bar" id="bar2"></div>
+            <div class="strength-bar" id="bar3"></div>
+            <div class="strength-bar" id="bar4"></div>
+          </div>
+          <p class="strength-label" id="strengthLabel"></p>
+        </div>
+
+        <div class="field">
+          <label for="confirmPassword">Confirm password</label>
+          <input type="password" id="confirmPassword" placeholder="Repeat password" autocomplete="new-password" required>
         </div>
 
         <button type="submit" class="btn-submit" id="submitBtn">
           <span class="spinner"></span>
-          <span class="btn-text-inner">Sign in</span>
+          <span class="btn-text-inner">Create account</span>
         </button>
 
       </form>
 
+      <!-- Success state (shown after signup) -->
+      <div class="success-state" id="successState">
+        <div class="success-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <p class="success-title">Account created</p>
+        <p class="success-msg">Check your email to confirm your address, then sign in.</p>
+        <a href="index.html" class="btn-submit" style="text-decoration:none; display:flex;">Go to login</a>
+      </div>
+
       <div class="divider">or</div>
 
       <p class="switch-text">
-        Don't have an account? <a href="signup.html">Create one</a>
+        Already have an account? <a href="index.html">Sign in</a>
       </p>
 
     </div>
@@ -370,20 +486,57 @@
 
 </div>
 
+<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/supabase.js"></script>
-<script src="js/auth.js"></script>
 
 <script>
 (function () {
 
-  const form       = document.getElementById('loginForm');
-  const submitBtn  = document.getElementById('submitBtn');
-  const alertError = document.getElementById('alertError');
+  // ── Password strength ─────────────────────────────
+  const passwordInput  = document.getElementById('password');
+  const bars           = [1,2,3,4].map(n => document.getElementById('bar' + n));
+  const strengthLabel  = document.getElementById('strengthLabel');
+  const levels         = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const levelClass     = ['', 'active-weak', 'active-fair', 'active-good', 'active-strong'];
+  const levelColor     = ['', '#e53935', '#fb8c00', '#43a047', '#1a9e5c'];
+
+  function scorePassword(pw) {
+    let score = 0;
+    if (pw.length >= 8)  score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    return Math.min(4, score);
+  }
+
+  passwordInput.addEventListener('input', () => {
+    const pw    = passwordInput.value;
+    const score = pw.length === 0 ? 0 : Math.max(1, scorePassword(pw));
+    bars.forEach((bar, i) => {
+      bar.className = 'strength-bar' + (i < score ? ' ' + levelClass[score] : '');
+    });
+    strengthLabel.textContent = pw.length > 0 ? levels[score] : '';
+    strengthLabel.style.color = levelColor[score];
+  });
+
+  // ── Form submission ───────────────────────────────
+  const form          = document.getElementById('signupForm');
+  const submitBtn     = document.getElementById('submitBtn');
+  const alertError    = document.getElementById('alertError');
+  const alertSuccess  = document.getElementById('alertSuccess');
+  const successState  = document.getElementById('successState');
 
   function showError(msg) {
     alertError.textContent = msg;
     alertError.classList.add('visible');
+    alertSuccess.classList.remove('visible');
+  }
+
+  function clearAlerts() {
+    alertError.classList.remove('visible');
+    alertSuccess.classList.remove('visible');
   }
 
   function setLoading(on) {
@@ -393,32 +546,81 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    alertError.classList.remove('visible');
+    clearAlerts();
 
     const email    = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
+    const confirm  = document.getElementById('confirmPassword').value;
 
-    if (!email || !password) {
-      showError('Please enter your email and password.');
+    // ── Client-side validation ────────────────────────
+    if (!email) { showError('Email address is required.'); return; }
+
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(email)) { showError('Please enter a valid email address.'); return; }
+
+    if (!password) { showError('Password is required.'); return; }
+    if (password.length < 8) { showError('Password must be at least 8 characters.'); return; }
+
+    if (scorePassword(password) < 2) {
+      showError('Password is too weak. Add uppercase letters, numbers or symbols.');
       return;
     }
 
+    if (password !== confirm) {
+      showError('Passwords do not match.');
+      document.getElementById('confirmPassword').classList.add('error');
+      return;
+    }
+
+    document.getElementById('confirmPassword').classList.remove('error');
+
+    // ── Supabase signup ───────────────────────────────
     setLoading(true);
+
     try {
-      await window.authHandler.login(email, password);
+      // window.supabaseClient is initialised in js/supabase.js
+      const { data, error } = await window.supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          // emailRedirectTo is optional — set to your post-confirm URL if needed
+          // emailRedirectTo: window.location.origin + '/index.html',
+        }
+      });
+
+      if (error) throw error;
+
+      // Supabase returns a session immediately when email confirmation is OFF,
+      // or identities array when confirmation is ON.
+      const needsConfirm =
+        data.user &&
+        data.user.identities &&
+        data.user.identities.length === 0;
+
+      if (needsConfirm) {
+        // Email already registered — Supabase returns an empty identities array
+        showError('An account with this email already exists. Please sign in.');
+        return;
+      }
+
+      // All good — show success state
+      form.style.display = 'none';
+      successState.classList.add('visible');
+
     } catch (err) {
+      // Map common Supabase error messages to friendlier text
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials')) {
-        showError('Incorrect email or password.');
+      if (msg.toLowerCase().includes('already registered')) {
+        showError('An account with this email already exists. Please sign in.');
+      } else if (msg.toLowerCase().includes('password')) {
+        showError('Password does not meet requirements: ' + msg);
       } else {
-        showError(msg || 'Sign in failed. Please try again.');
+        showError(msg || 'Something went wrong. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   });
-
-  if (window.authHandler) window.authHandler.checkSession();
 
 })();
 </script>

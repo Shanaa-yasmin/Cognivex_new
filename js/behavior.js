@@ -19,7 +19,7 @@ let lastMouseTime = 0;
 let monitoringActive = true;
 let otpPending = false;
 let sessionEndSent = false;
-let snapshotsSentCount = 0;  // Track how many snapshots were successfully sent
+let snapshotsSentCount = 0;
 
 // ============================
 // SESSION ID (FRESH EVERY LOGIN)
@@ -66,10 +66,6 @@ async function initBehaviorTracking() {
 function setupEventListeners() {
     console.log("Setting up event listeners...");
 
-    // FIX: Split into keydown + keyup listeners.
-    // - Both include a "type" field so feature_extractor.py can filter keyups correctly.
-    // - Use e.key directly (no remapping) — JS already gives "Backspace", "Enter", etc.
-    //   which is exactly what feature_extractor.py expects.
     document.addEventListener("keydown", (e) => {
         if (!monitoringActive) return;
         keyEvents.push({
@@ -244,6 +240,17 @@ function handleRiskResponse(result) {
             showOTPDialog(result.session_id);
             break;
 
+        // ── Grace period: shown on status bar + logged to console (inspect page) ──
+        case "GRACE_PERIOD":
+            if (statusDot) statusDot.style.background = '#3b82f6';  // blue
+            if (statusText) statusText.textContent =
+                `Grace Period Active — ${result.remaining_minutes} min remaining (scoring paused)`;
+            console.log(
+                `%c[GRACE PERIOD] Active — ${result.remaining_minutes} min remaining. Scoring is paused.`,
+                'background: #1e3a5f; color: #60a5fa; font-weight: bold; padding: 2px 6px; border-radius: 3px;'
+            );
+            break;
+
         case "SESSION_TERMINATED":
             console.error("HIGH risk - session terminated");
             if (statusDot) statusDot.style.background = '#ef4444';
@@ -321,10 +328,18 @@ function showOTPDialog(sessionId) {
             if (result.status === "OTP_VERIFIED") {
                 clearInterval(countdown);
                 closeOTPDialog();
+
+                // ── Show grace period started immediately after OTP success ──
                 var dot = document.querySelector('.status-dot');
                 var txt = document.querySelector('.status-indicator span:last-child');
-                if (dot) dot.style.background = '#10b981';
-                if (txt) txt.textContent = 'Session Active - Identity Verified';
+                if (dot) dot.style.background = '#3b82f6';
+                if (txt) txt.textContent =
+                    `Grace Period Started — ${result.grace_period_minutes} min (scoring paused)`;
+                console.log(
+                    `%c[GRACE PERIOD STARTED] Identity verified. Scoring paused for ${result.grace_period_minutes} minutes.`,
+                    'background: #1e3a5f; color: #60a5fa; font-weight: bold; padding: 2px 6px; border-radius: 3px;'
+                );
+
             } else {
                 clearInterval(countdown);
                 closeOTPDialog();

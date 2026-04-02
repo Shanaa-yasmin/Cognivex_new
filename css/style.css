@@ -574,3 +574,69 @@ input[type="password"]:focus,
 #otpModal {
     display: none;
 }
+:root {
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --secondary-color: #7c3aed;
+
+    --bg-color: #f5f7fb;
+    --card-bg: rgba(255, 255, 255, 0.7);
+
+    --text-color: #111827;
+    --text-light: #6b7280;
+
+    --border-color: rgba(0,0,0,0.08);
+
+    --shadow-lg: 0 20px 40px rgba(0,0,0,0.08);
+}
+.glass {
+    backdrop-filter: blur(14px);
+    background: rgba(255,255,255,0.65);
+    border: 1px solid rgba(255,255,255,0.3);
+}
+.login-page {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed, #06b6d4);
+    background-size: 200% 200%;
+    animation: gradientMove 10s ease infinite;
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+.login-container {
+    border-radius: 1rem;
+    backdrop-filter: blur(12px);
+    transition: transform 0.3s ease;
+}
+
+.login-container:hover {
+    transform: translateY(-5px);
+}
+.btn-primary {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    border: none;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+}
+input, .text-input {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+.content-paragraph {
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(8px);
+    border-left: 4px solid #4f46e5;
+}
+.switch-link {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.switch-link a {
+    font-weight: 600;
+}

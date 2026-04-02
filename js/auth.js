@@ -2,6 +2,7 @@ window.authHandler = {
 
     isLoginPage() {
         return window.location.pathname.includes('index.html') ||
+               window.location.pathname.includes('signup.html') ||
                window.location.pathname === '/' ||
                window.location.pathname.endsWith('/');
     },

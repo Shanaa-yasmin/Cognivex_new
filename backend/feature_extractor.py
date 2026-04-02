@@ -7,11 +7,17 @@ Changes from original:
                             matching friend's np.std(intervals)/1000
   3. avg_mouse_speed      — duration now uses mouse-only timestamps (not all events)
   4. mouse_move_variance  — changed from population variance to std dev (px/s),
-                            removed speed < 5000 cap
+                            removed speed < 5000 cap, fixed mean to use per-segment speeds
   5. scroll_frequency     — duration now uses scroll-only timestamps (not all events)
   6. idle_ratio           — complete rewrite: now measures true keystroke gap ratio
                             (silent time between keyups / total keyup span) instead of
                             the old event-rate proxy
+
+Bug fixes vs previous version:
+  A. typing_speed         — fixed indentation: was always 0.0 when key_duration >= 1.0
+  B. key_duration         — added else branch so it's always defined
+  C. mouse_move_variance  — fixed mean: now uses mean of per-segment speeds, not
+                            avg_mouse_speed (total dist / time)
 """
 
 import math
@@ -80,11 +86,23 @@ def extract_features(
     total_keys = len(key_events)
 
     # FIX 1: JS KeyboardEvent.key standard is "Backspace", not "BACKSPACE"
-    # Your original code always returned 0.0 because "BACKSPACE" never matched
     backspaces = sum(1 for e in key_events if e.get("key") == "Backspace")
 
-    typing_speed    = len(keyups) / window_duration if window_duration > 0 else 0.0
+    # FIX A: added else branch so key_duration is always defined
+    if len(key_events) >= 2:
+        key_duration = _time_diff(key_events[0]["timestamp"], key_events[-1]["timestamp"])
+    else:
+        key_duration = window_duration
+
+    if key_duration < 1.0:
+        key_duration = window_duration
+
+    # FIX B: typing_speed moved outside if/else so it's always calculated
+    typing_speed = len(keyups) / key_duration
+
     backspace_ratio = backspaces / total_keys if total_keys > 0 else 0.0
+
+    MAX_TYPING_GAP = 2.0  # seconds
 
     keystroke_intervals = []
     for i in range(1, len(keyups)):
@@ -92,7 +110,7 @@ def extract_features(
         ts_curr = keyups[i].get("timestamp")
         if ts_prev and ts_curr:
             dt = _time_diff(ts_prev, ts_curr)
-            if dt > 0:
+            if 0 < dt <= MAX_TYPING_GAP:
                 keystroke_intervals.append(dt)
 
     avg_keystroke_interval = (
@@ -101,7 +119,6 @@ def extract_features(
     )
 
     # FIX 2: std dev in seconds, not population variance in seconds^2
-    # Original produced tiny values like 0.002; friend's produces values like 0.04-0.5
     keystroke_variance = (
         math.sqrt(
             sum((v - avg_keystroke_interval) ** 2 for v in keystroke_intervals)
@@ -115,7 +132,6 @@ def extract_features(
     moves = [e for e in mouse_events if e.get("type") == "MOVE"]
 
     # FIX 3: use mouse-only duration for avg_mouse_speed
-    # Original divided by window_duration which includes keyboard/scroll dead time
     if len(moves) >= 2:
         mouse_duration = _time_diff(
             moves[0]["timestamp"], moves[-1]["timestamp"]
@@ -133,9 +149,7 @@ def extract_features(
 
     avg_mouse_speed = total_dist / mouse_duration if mouse_duration > 0 else 0.0
 
-    # FIX 4: std dev (px/s) not population variance (px/s)^2
-    # Also removed the speed < 5000 filter — it was silently discarding real fast
-    # movements and making variance artificially low
+    # FIX 4 & C: std dev (px/s) using mean of per-segment speeds (not avg_mouse_speed)
     speeds = []
     for i in range(1, len(moves)):
         dx = moves[i].get("x", 0) - moves[i - 1].get("x", 0)
@@ -145,19 +159,19 @@ def extract_features(
         if dt > 0:
             speeds.append(dist / dt)
 
-    mouse_move_variance = (
-        math.sqrt(
-            sum((v - avg_mouse_speed) ** 2 for v in speeds) / len(speeds)
+    if speeds:
+        mean_speed = sum(speeds) / len(speeds)
+        mouse_move_variance = math.sqrt(
+            sum((v - mean_speed) ** 2 for v in speeds) / len(speeds)
         )
-        if speeds else 0.0
-    )
+    else:
+        mouse_move_variance = 0.0
 
     # ── Scroll features ────────────────────────────────────────────────────
 
     scrolls = [e for e in scroll_events if e.get("type") == "SCROLL"]
 
     # FIX 5: use scroll-only duration for scroll_frequency
-    # Original divided by window_duration which inflates the denominator
     if len(scrolls) >= 2:
         scroll_duration = _time_diff(
             scrolls[0]["timestamp"], scrolls[-1]["timestamp"]
@@ -171,26 +185,19 @@ def extract_features(
 
     # ── Idle ratio ─────────────────────────────────────────────────────────
 
-    # FIX 6: true keystroke gap ratio — (total keyup span - sum of intervals) / total span
-    # i.e. the fraction of time between first and last keyup that was NOT typing
-    #
-    # Original was an event-rate proxy: 1 - (active_events / 10 events/s ceiling)
-    # That mixes keyboard, mouse, and scroll into one number and has nothing to do
-    # with typing idle time. This rewrite matches the standard behavioural biometrics
-    # definition used in friend's implementation.
-    
+    # FIX 6: true keystroke gap ratio
     IDLE_THRESHOLD = 2.0  # seconds — gaps longer than this count as idle
 
     if len(keyups) >= 2:
         total_span = _time_diff(keyups[0]["timestamp"], keyups[-1]["timestamp"])
-        
+
         idle_time = 0.0
         for i in range(1, len(keyups)):
             ts_prev = keyups[i - 1].get("timestamp")
             ts_curr = keyups[i].get("timestamp")
             if ts_prev and ts_curr:
                 gap = _time_diff(ts_prev, ts_curr)
-                if gap > IDLE_THRESHOLD:      # only long gaps count as idle
+                if gap > IDLE_THRESHOLD:
                     idle_time += gap
 
         idle_ratio = idle_time / total_span if total_span > 0 else 0.0

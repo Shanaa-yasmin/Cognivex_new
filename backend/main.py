@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from session_controller import handle_snapshot, handle_session_end
+from session_controller import handle_snapshot, handle_session_end, set_grace_period
 from otp_controller import issue_otp, verify_otp
 from supabase_client import (
     get_user_status,
@@ -126,13 +126,25 @@ async def session_end(req: SessionEndRequest):
 
 @app.post("/verify-otp")
 async def verify_otp_route(req: VerifyOTPRequest):
-    """Verify OTP submitted by the user after a MEDIUM-risk challenge."""
+    """
+    Verify OTP submitted by the user after a MEDIUM-risk challenge.
+    On success, starts a 10-minute grace period — no scoring during this window.
+    """
     try:
-        return verify_otp(
+        result = verify_otp(
             user_id=req.user_id,
             session_id=req.session_id,
             otp_code=req.otp_code,
         )
+
+        # ── Grace period: start 10-min window after successful OTP verification ──
+        if result.get("status") == "OTP_VERIFIED":
+            set_grace_period(req.user_id)
+            result["grace_period_minutes"] = 10
+            logger.info(f"Grace period started for user={req.user_id} after OTP verification")
+
+        return result
+
     except Exception as e:
         logger.error(f"OTP verify error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -164,10 +176,6 @@ async def health():
 async def admin_train(user_id: str):
     """
     Force a full retrain from the user's stored behavior_features rows.
-
-    IMPORTANT: run this after deploying the no-normalization update so the
-    model is rebuilt with raw features and thresholds are recomputed.
-    The old model binary trained with normalized features is no longer valid.
     """
     from model_engine import train_model, ENROLLMENT_SESSIONS
 
@@ -208,13 +216,7 @@ async def admin_train(user_id: str):
 async def admin_debug(user_id: str):
     """
     Show raw feature values and what score the current model would give
-    each stored session. Normalization has been removed — features are
-    passed directly to IsolationForest as-is.
-
-    Use this to:
-      - Verify features look sensible before retraining
-      - See how much spread there is across training sessions
-      - Confirm scoring is working with raw feature values
+    each stored session.
     """
     from model_engine import (
         FEATURE_COLUMNS, _raw_row,

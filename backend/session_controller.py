@@ -3,6 +3,7 @@ session_controller.py — 30-sec snapshot pipeline + session-end orchestration
 """
 
 import logging
+from datetime import datetime, timezone
 
 from feature_extractor import extract_features, aggregate_features
 from model_engine import load_model, predict_risk, handle_session_end_training
@@ -16,6 +17,35 @@ from supabase_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ──────────────────────────────────────────────
+# GRACE PERIOD STORE (in-memory)
+# ──────────────────────────────────────────────
+# { user_id: datetime (UTC) }  — expires after GRACE_PERIOD_MINUTES
+GRACE_PERIOD_MINUTES = 10
+_grace_periods: dict[str, datetime] = {}
+
+
+def set_grace_period(user_id: str) -> None:
+    """Start a 10-minute grace period for the user after OTP is verified."""
+    from datetime import timedelta
+    _grace_periods[user_id] = datetime.now(timezone.utc) + timedelta(minutes=GRACE_PERIOD_MINUTES)
+    logger.info(f"Grace period started for user={user_id}, expires at {_grace_periods[user_id]}")
+
+
+def get_grace_period_remaining(user_id: str) -> int | None:
+    """
+    Returns remaining grace period minutes if active, else None.
+    Also cleans up expired entries.
+    """
+    grace_until = _grace_periods.get(user_id)
+    if not grace_until:
+        return None
+    now = datetime.now(timezone.utc)
+    if now >= grace_until:
+        del _grace_periods[user_id]   # expired — clean up
+        return None
+    return max(1, int((grace_until - now).total_seconds() / 60))
 
 
 # ──────────────────────────────────────────────
@@ -32,15 +62,26 @@ def handle_snapshot(
 ) -> dict:
     """
     Receives a 30-second behavioral snapshot:
-      1. Store raw data in behavior_logs
-      2. Extract 8 features in-memory (NOT persisted to behavior_features)
-      3. Load model + per-user adaptive thresholds
-      4. Score the snapshot
-      5. Update risk_level in behavior_logs
-      6. Return risk response
+      1. Check grace period — skip scoring if active
+      2. Store raw data in behavior_logs
+      3. Extract 8 features in-memory (NOT persisted to behavior_features)
+      4. Load model + per-user adaptive thresholds
+      5. Score the snapshot
+      6. Update risk_level in behavior_logs
+      7. Return risk response
     """
 
-    # Step 1 — persist raw snapshot
+    # Step 1 — grace period check (skip scoring entirely if active)
+    remaining = get_grace_period_remaining(user_id)
+    if remaining is not None:
+        logger.info(f"Grace period active for user={user_id}, {remaining} min remaining — skipping scoring")
+        return {
+            "status":            "GRACE_PERIOD",
+            "risk_level":        "LOW",
+            "remaining_minutes": remaining,
+        }
+
+    # Step 2 — persist raw snapshot
     log_row = insert_behavior_log(
         user_id=user_id,
         session_id=session_id,
@@ -51,7 +92,7 @@ def handle_snapshot(
     )
     log_id = log_row.get("id")
 
-    # Step 2 — extract features in memory only
+    # Step 3 — extract features in memory only
     features = extract_features(key_events, mouse_events, scroll_events, summary)
 
     if features is None:
@@ -63,8 +104,7 @@ def handle_snapshot(
             "detail":     "insufficient_data_for_scoring",
         }
 
-    # Step 3 — load model and adaptive thresholds
-    # load_model() now returns 4 values: (model, version, medium_threshold, high_threshold)
+    # Step 4 — load model and adaptive thresholds
     model, model_version, medium_threshold, high_threshold = load_model(user_id)
 
     if model is None:
@@ -72,12 +112,12 @@ def handle_snapshot(
             update_behavior_log_risk(log_id, "LOW", None)
         return {"status": "COLLECTING_DATA", "risk_level": "LOW"}
 
-    # Step 4 — score using per-user adaptive thresholds
+    # Step 5 — score using per-user adaptive thresholds
     risk_level, raw_score = predict_risk(
         model, features, medium_threshold, high_threshold
     )
 
-    # Step 5 — update behavior_logs row
+    # Step 6 — update behavior_logs row
     if log_id:
         update_behavior_log_risk(log_id, risk_level, model_version)
 
@@ -87,7 +127,7 @@ def handle_snapshot(
         f"thresholds: M<{medium_threshold:.4f} H<{high_threshold:.4f}"
     )
 
-    # Step 6 — return risk response
+    # Step 7 — return risk response
     if risk_level == "LOW":
         return {
             "status":        "OK",
@@ -127,6 +167,9 @@ def handle_session_end(user_id: str, session_id: str) -> dict:
     Idempotent: skips if features already stored for this session.
     """
     logger.info(f"SESSION END | user={user_id} session={session_id}")
+
+    # Clear any active grace period on session end
+    _grace_periods.pop(user_id, None)
 
     # Idempotency guard — prevents duplicate feature rows
     if features_exist_for_session(user_id, session_id):
