@@ -270,18 +270,35 @@ function showOTPDialog(sessionId) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'otpModal';
-        modal.innerHTML = '<div class="otp-overlay">' +
-            '<div class="otp-dialog">' +
-            '<h3>Identity Verification</h3>' +
-            '<p>Unusual behavior detected. Please enter the verification code to continue.</p>' +
-            '<p class="otp-hint">Code: <strong>2323</strong></p>' +
-            '<input type="text" id="otpInput" maxlength="4" placeholder="Enter code" autocomplete="off" />' +
-            '<div class="otp-buttons">' +
-            '<button id="otpSubmitBtn" class="btn btn-primary">Verify</button>' +
-            '</div>' +
-            '<p id="otpError" class="otp-error"></p>' +
-            '<p class="otp-timer">Expires in <span id="otpCountdown">15</span>s</p>' +
-            '</div></div>';
+        modal.innerHTML = `
+        <div class="otp-overlay">
+            <div class="otp-dialog">
+                <div class="otp-icon">🔐</div>
+                <h3>Identity Verification</h3>
+                <p class="otp-subtext">A 6-digit verification code has been sent to your registered email address.</p>
+
+                <div class="otp-input-group">
+                    <input type="text" id="otpInput" maxlength="6"
+                        placeholder="• • • • • •"
+                        autocomplete="off"
+                        inputmode="numeric"
+                        pattern="[0-9]*" />
+                </div>
+
+                <button id="otpSubmitBtn" class="btn btn-primary otp-btn">Verify Identity</button>
+
+                <p id="otpError" class="otp-error"></p>
+
+                <div class="otp-footer">
+                    <span>Code expires in </span>
+                    <span id="otpCountdown" class="otp-countdown">300</span>
+                    <span>s</span>
+                    <div class="otp-progress-bar">
+                        <div id="otpProgressFill" class="otp-progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
         document.body.appendChild(modal);
     }
 
@@ -289,11 +306,22 @@ function showOTPDialog(sessionId) {
     document.getElementById('otpInput').value = '';
     document.getElementById('otpError').textContent = '';
 
-    var seconds = 15;
+    // Only allow numeric input
+    document.getElementById('otpInput').addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+    });
+
+    var totalSeconds = 300;
+    var seconds = totalSeconds;
     var countdownEl = document.getElementById('otpCountdown');
+    var progressFill = document.getElementById('otpProgressFill');
+
+    if (countdownEl) countdownEl.textContent = seconds;
+
     var countdown = setInterval(function() {
         seconds--;
         if (countdownEl) countdownEl.textContent = seconds;
+        if (progressFill) progressFill.style.width = ((seconds / totalSeconds) * 100) + '%';
         if (seconds <= 0) {
             clearInterval(countdown);
             closeOTPDialog();
@@ -306,10 +334,14 @@ function showOTPDialog(sessionId) {
 
     var doSubmit = async function() {
         var code = inputEl.value.trim();
-        if (!code) return;
+        if (!code || code.length < 6) {
+            document.getElementById('otpError').textContent = 'Please enter the complete 6-digit code.';
+            return;
+        }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Verifying...';
+        document.getElementById('otpError').textContent = '';
 
         try {
             var resp = await fetch(BACKEND_URL + "/verify-otp", {
@@ -329,16 +361,11 @@ function showOTPDialog(sessionId) {
                 clearInterval(countdown);
                 closeOTPDialog();
 
-                // ── Show grace period started immediately after OTP success ──
                 var dot = document.querySelector('.status-dot');
                 var txt = document.querySelector('.status-indicator span:last-child');
                 if (dot) dot.style.background = '#3b82f6';
                 if (txt) txt.textContent =
                     `Grace Period Started — ${result.grace_period_minutes} min (scoring paused)`;
-                console.log(
-                    `%c[GRACE PERIOD STARTED] Identity verified. Scoring paused for ${result.grace_period_minutes} minutes.`,
-                    'background: #1e3a5f; color: #60a5fa; font-weight: bold; padding: 2px 6px; border-radius: 3px;'
-                );
 
             } else {
                 clearInterval(countdown);
@@ -347,10 +374,10 @@ function showOTPDialog(sessionId) {
             }
         } catch (err) {
             console.error("OTP verification error:", err);
-            document.getElementById('otpError').textContent = 'Verification failed. Try again.';
+            document.getElementById('otpError').textContent = 'Verification failed. Please try again.';
         } finally {
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Verify';
+            submitBtn.textContent = 'Verify Identity';
         }
     };
 
@@ -448,6 +475,8 @@ window.flushBehaviorData = sendSnapshotToBackend;
 // Flush on tab hide
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "hidden") {
+        // During OTP challenge, avoid hidden-tab snapshots that can trigger risk termination.
+        if (otpPending) return;
         sendSnapshotToBackend();
     }
 });

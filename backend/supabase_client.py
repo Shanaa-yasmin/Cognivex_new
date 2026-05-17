@@ -1,13 +1,16 @@
 """
 supabase_client.py — All DB operations for Cognivex backend
 """
-
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
 from dotenv import load_dotenv
+import random 
+from pathlib import Path
 
-load_dotenv()
+logger = logging.getLogger(__name__)
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
 
 SUPABASE_URL: str = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY")
@@ -237,16 +240,18 @@ def get_adaptive_thresholds(user_id: str) -> tuple[float | None, float | None]:
 # OTP CHALLENGES
 # ──────────────────────────────────────────────
 
+
 def create_otp_challenge(user_id: str, session_id: str) -> dict:
-    """Create a new OTP challenge with 2-minute expiry."""
+    """Create a new OTP challenge with 5-minute expiry."""
     now = datetime.now(timezone.utc)
+    otp_code = str(random.randint(100000, 999999))  # ← random 6-digit code
     row = {
         "user_id":    user_id,
         "session_id": session_id,
-        "otp_code":   "2323",
+        "otp_code":   otp_code,
         "status":     "PENDING",
         "created_at": now.isoformat(),
-        "expires_at": (now + timedelta(minutes=2)).isoformat(),
+        "expires_at": (now + timedelta(minutes=5)).isoformat(),
     }
     resp = _client.table("otp_challenges").insert(row).execute()
     return resp.data[0] if resp.data else {}
@@ -338,3 +343,11 @@ def get_user_status(user_id: str) -> dict:
         "medium_threshold":   meta.get("medium_threshold") if meta else None,
         "high_threshold":     meta.get("high_threshold") if meta else None,
     }
+def get_user_email(user_id: str) -> str | None:
+    """Fetch email directly from Supabase Auth (no separate users table needed)."""
+    try:
+        response = _client.auth.admin.get_user_by_id(user_id)
+        return response.user.email if response.user else None
+    except Exception as e:
+        logger.error(f"Failed to fetch auth email for user={user_id}: {e}")
+        return None

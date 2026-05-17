@@ -640,3 +640,138 @@ input, .text-input {
 .switch-link a {
     font-weight: 600;
 }
+/* OTP Modal Overlay */
+.otp-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+/* OTP Dialog Box */
+.otp-dialog {
+    background: #1a1f2e;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    animation: otpSlideIn 0.3s ease;
+}
+
+@keyframes otpSlideIn {
+    from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+.otp-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+}
+
+.otp-dialog h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 8px;
+}
+
+.otp-subtext {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin-bottom: 28px;
+    line-height: 1.5;
+}
+
+/* Input */
+.otp-input-group {
+    margin-bottom: 20px;
+}
+
+.otp-input-group input {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.6rem;
+    letter-spacing: 10px;
+    text-align: center;
+    background: #0f1219;
+    border: 2px solid rgba(99, 102, 241, 0.4);
+    border-radius: 10px;
+    color: #f1f5f9;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.otp-input-group input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* Button */
+.otp-btn {
+    width: 100%;
+    padding: 13px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 10px;
+    background: #6366f1;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.otp-btn:hover:not(:disabled) {
+    background: #4f46e5;
+    transform: translateY(-1px);
+}
+
+.otp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Error */
+.otp-error {
+    color: #f87171;
+    font-size: 0.8rem;
+    margin-top: 10px;
+    min-height: 18px;
+}
+
+/* Footer / timer */
+.otp-footer {
+    margin-top: 24px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.otp-countdown {
+    font-weight: 700;
+    color: #f59e0b;
+    margin: 0 2px;
+}
+
+/* Progress bar */
+.otp-progress-bar {
+    margin-top: 10px;
+    height: 4px;
+    background: #1e293b;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.otp-progress-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #6366f1, #f59e0b);
+    border-radius: 99px;
+    transition: width 1s linear;
+}

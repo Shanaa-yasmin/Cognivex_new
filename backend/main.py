@@ -7,6 +7,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
+
 from session_controller import handle_snapshot, handle_session_end, set_grace_period
 from otp_controller import issue_otp, verify_otp
 from supabase_client import (
