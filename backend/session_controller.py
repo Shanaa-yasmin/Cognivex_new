@@ -73,13 +73,7 @@ def handle_snapshot(
 
     # Step 1 — grace period check (skip scoring entirely if active)
     remaining = get_grace_period_remaining(user_id)
-    if remaining is not None:
-        logger.info(f"Grace period active for user={user_id}, {remaining} min remaining — skipping scoring")
-        return {
-            "status":            "GRACE_PERIOD",
-            "risk_level":        "LOW",
-            "remaining_minutes": remaining,
-        }
+    is_verified = remaining is not None
 
     # Step 2 — persist raw snapshot
     log_row = insert_behavior_log(
@@ -89,8 +83,19 @@ def handle_snapshot(
         mouse_events=mouse_events,
         scroll_events=scroll_events,
         summary=summary,
+        is_otp_verified=is_verified,
     )
     log_id = log_row.get("id")
+
+    if is_verified:
+        logger.info(f"Grace period active for user={user_id}, {remaining} min remaining — skipping scoring")
+        if log_id:
+            update_behavior_log_risk(log_id, "LOW", None)
+        return {
+            "status":            "GRACE_PERIOD",
+            "risk_level":        "LOW",
+            "remaining_minutes": remaining,
+        }
 
     # Step 3 — extract features in memory only
     features = extract_features(key_events, mouse_events, scroll_events, summary)
@@ -142,6 +147,7 @@ def handle_snapshot(
             "status":        "OTP_REQUIRED",
             "risk_level":    "MEDIUM",
             "session_id":    session_id,
+            "log_id":        log_id,
             "model_version": model_version,
             "score":         round(raw_score, 4),
         }

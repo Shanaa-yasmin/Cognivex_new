@@ -18,6 +18,7 @@ from supabase_client import (
     fetch_latest_features,
     get_model_metadata,
     count_user_features,
+    update_behavior_log_risk_by_id,
 )
 
 # ──────────────────────────────────────────────
@@ -98,7 +99,7 @@ async def session_snapshot(req: SnapshotRequest):
 
         # MEDIUM risk — issue OTP challenge
         if result.get("risk_level") == "MEDIUM":
-            otp = issue_otp(req.user_id, req.session_id)
+            otp = issue_otp(req.user_id, req.session_id, log_id=result.get("log_id"))
             result["otp_challenge_id"] = otp.get("id")
 
         return result
@@ -141,10 +142,17 @@ async def verify_otp_route(req: VerifyOTPRequest):
             otp_code=req.otp_code,
         )
 
-        # ── Grace period: start 10-min window after successful OTP verification ──
         if result.get("status") == "OTP_VERIFIED":
             set_grace_period(req.user_id)
             result["grace_period_minutes"] = 10
+
+            log_id = result.get("log_id")   # NEW
+            if log_id:
+                update_behavior_log_risk_by_id(log_id, "LOW", is_otp_verified=True)
+                logger.info(f"Re-tagged log {log_id} as verified-LOW after OTP success")
+            else:
+                logger.warning(f"verify_otp returned no log_id for user={req.user_id}")
+
             logger.info(f"Grace period started for user={req.user_id} after OTP verification")
 
         return result

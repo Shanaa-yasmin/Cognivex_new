@@ -24,8 +24,6 @@ FROM_NAME     = "Cognivex"
 
 # ── Email sender ──────────────────────────────────────────────────────────────
 
-# Replace the entire send_otp_email function in otp_controller.py
-
 def send_otp_email(to_email: str, otp_code: str) -> bool:
     """Send OTP via Supabase edge function or fallback to Resend API."""
     import httpx
@@ -102,6 +100,7 @@ def verify_otp(user_id: str, session_id: str, otp_code: str) -> dict:
     otp_id      = otp_row["id"]
     stored_code = otp_row.get("otp_code", "")
     expires_at  = otp_row.get("expires_at")
+    log_id      = otp_row.get("log_id")
 
     # Check expiry
     if expires_at:
@@ -122,7 +121,7 @@ def verify_otp(user_id: str, session_id: str, otp_code: str) -> dict:
     if otp_code.strip() == stored_code.strip():
         update_otp_status(otp_id, "VERIFIED")
         logger.info(f"OTP verified | user={user_id} session={session_id}")
-        return {"status": "OTP_VERIFIED"}
+        return {"status": "OTP_VERIFIED", "log_id": log_id}
     else:
         update_otp_status(otp_id, "FAILED")
         logger.warning(f"OTP wrong code | user={user_id} session={session_id}")

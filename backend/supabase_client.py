@@ -29,8 +29,13 @@ def get_client() -> Client:
 # BEHAVIOR LOGS
 # ──────────────────────────────────────────────
 
-def insert_behavior_log(user_id: str, session_id: str,
-                        key_events, mouse_events, scroll_events, summary) -> dict:
+def insert_behavior_log(user_id: str,
+    session_id: str,
+    key_events: list,
+    mouse_events: list,
+    scroll_events: list,
+    summary: dict,
+    is_otp_verified: bool = False,) -> dict:
     """Insert a 30-sec snapshot into behavior_logs. Returns the inserted row."""
     row = {
         "user_id":      user_id,
@@ -39,10 +44,22 @@ def insert_behavior_log(user_id: str, session_id: str,
         "mouse_events": mouse_events,
         "scroll_events":scroll_events,
         "summary":      summary,
+        "is_otp_verified": is_otp_verified,
     }
     resp = _client.table("behavior_logs").insert(row).execute()
     return resp.data[0] if resp.data else {}
 
+
+def update_behavior_log_risk_by_id(log_id: str, risk_level: str, is_otp_verified: bool = None):
+    """Retroactively update a specific log row's risk_level (and optionally verified flag)."""
+    update_data = {"risk_level": risk_level}
+    if is_otp_verified is not None:
+        update_data["is_otp_verified"] = is_otp_verified
+
+    _client.table("behavior_logs") \
+        .update(update_data) \
+        .eq("id", log_id) \
+        .execute()
 
 def update_behavior_log_risk(log_id: str, risk_level: str, model_version: int | None):
     """Update risk_level and model_version on a behavior_logs row."""
@@ -249,6 +266,7 @@ def create_otp_challenge(user_id: str, session_id: str) -> dict:
         "user_id":    user_id,
         "session_id": session_id,
         "otp_code":   otp_code,
+        "log_id":     log_id,
         "status":     "PENDING",
         "created_at": now.isoformat(),
         "expires_at": (now + timedelta(minutes=5)).isoformat(),
