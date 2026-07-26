@@ -340,6 +340,36 @@ Returns the current model state for a user.
 
 ---
 
+## 🧪 Postman API Testing
+
+An automated Postman collection is included in `postman/cognivex_otp_flow.postman_collection.json` to test the OTP re-tagging flow, health checks, risk thresholds, and grace period logic.
+
+### Setup Instructions
+
+1. **Import the Collection**:
+   - In Postman, click **File > Import** and select `postman/cognivex_otp_flow.postman_collection.json`.
+
+2. **Set Up Local Environment**:
+   - Copy the environment template:
+     ```bash
+     cp postman/cognivex-local.postman_environment.example.json postman/cognivex-local.postman_environment.json
+     ```
+   - Import `postman/cognivex-local.postman_environment.json` into Postman via **File > Import**.
+   - Select **Cognivex Local Environment** from the top-right environment dropdown.
+
+3. **Configure Environment Variables**:
+   - `base_url`: Target backend URL (default: `http://localhost:8000`).
+   - `test_email`: Email address for test authentication.
+   - `test_password`: Password for test authentication.
+   - `supabase_url`: Your Supabase project URL (e.g., `https://your-project.supabase.co`).
+   - `supabase_anon_key`: Your Supabase anon public API key.
+   - `user_id`: Automatically populated when running Request #2 (Supabase Auth Login), or set manually.
+   - `session_id`: Automatically generated during testing (`postman-test-{{$timestamp}}`).
+   - `log_id`: Automatically saved when Request #4 triggers a `MEDIUM` risk response.
+   - `otp_code`: Paste the verification code received via email before running Request #5 (`/verify-otp`).
+
+---
+
 ## 🚢 Deployment
 
 | Layer | Platform | Notes |

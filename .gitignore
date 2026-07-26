@@ -9,3 +9,7 @@ backend/.env
 .venv/
 .vscode/
 .pytest_cache/
+
+# Postman environment files containing secrets
+*.postman_environment.json
+!*.postman_environment.example.json

@@ -1,0 +1,478 @@
+{
+	"info": {
+		"_postman_id": "c1f7b8a2-7204-4b53-9d18-9a3e2182ef01",
+		"name": "Cognivex OTP Re-Tagging Flow",
+		"description": "Postman Collection v2.1 for testing the continuous behavioral authentication and OTP re-tagging flow in Cognivex FastAPI backend running at http://localhost:8000.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. GET /health",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Health status is ok\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"ok\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"health"
+					]
+				},
+				"description": "Checks backend health status. Asserts HTTP 200 and response body status == 'ok'."
+			},
+			"response": []
+		},
+		{
+			"name": "2. POST Supabase Auth Login (Optional)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Extract and set user_id collection variable\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    if (jsonData && jsonData.user && jsonData.user.id) {",
+							"        pm.environment.set(\"user_id\", jsonData.user.id);",
+							"        console.log(\"Extracted user_id: \" + jsonData.user.id);",
+							"    } else if (jsonData && jsonData.id) {",
+							"        pm.environment.set(\"user_id\", jsonData.id);",
+							"        console.log(\"Extracted user_id: \" + jsonData.id);",
+							"    } else {",
+							"        console.warn(\"User ID not found in auth response. Manually set {{user_id}} in environment variables.\");",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "apikey",
+						"value": "{{supabase_anon_key}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+				},
+				"url": {
+					"raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+					"host": [
+						"{{supabase_url}}"
+					],
+					"path": [
+						"auth",
+						"v1",
+						"token"
+					],
+					"query": [
+						{
+							"key": "grant_type",
+							"value": "password"
+						}
+					]
+				},
+				"description": "Authenticates against Supabase Auth API using email/password variables to retrieve the user's UUID and populate the {{user_id}} variable automatically."
+			},
+			"response": []
+		},
+		{
+			"name": "3. GET /admin/debug/{{user_id}}",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Assert and log risk threshold values\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property(\"medium_threshold\");",
+							"    pm.expect(jsonData).to.have.property(\"high_threshold\");",
+							"    ",
+							"    console.log(\"=== Risk Thresholds for User: \" + jsonData.user_id + \" ===\");",
+							"    console.log(\"Medium Threshold: \" + jsonData.medium_threshold);",
+							"    console.log(\"High Threshold: \" + jsonData.high_threshold);",
+							"    console.log(\"MEDIUM risk score range: High Threshold <= Score < Medium Threshold\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/admin/debug/{{user_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"admin",
+						"debug",
+						"{{user_id}}"
+					]
+				},
+				"description": "Fetches current model adaptive thresholds (medium_threshold & high_threshold) for the target user_id and logs them to Postman Console."
+			},
+			"response": []
+		},
+		{
+			"name": "4. POST /session/snapshot (Trigger MEDIUM Risk)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"if (!pm.variables.get(\"session_id\")) {",
+							"    var timestamp = Math.floor(Date.now() / 1000);",
+							"    pm.environment.set(\"session_id\", \"postman-test-\" + timestamp);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Check risk level and save log_id & session_id on MEDIUM risk\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    console.log(\"Snapshot Risk Result:\", jsonData);",
+							"    ",
+							"    if (jsonData.risk_level === \"MEDIUM\") {",
+							"        pm.expect(jsonData.log_id).to.be.ok;",
+							"        pm.environment.set(\"log_id\", jsonData.log_id);",
+							"        if (jsonData.session_id) {",
+							"            pm.environment.set(\"session_id\", jsonData.session_id);",
+							"        }",
+							"        console.log(\"Saved log_id: \" + jsonData.log_id);",
+							"        console.log(\"Saved session_id: \" + pm.variables.get(\"session_id\"));",
+							"    } else {",
+							"        console.warn(\"WARNING: Payload did not trigger MEDIUM risk score! Received risk_level: '\" + jsonData.risk_level + \"'. Payload needs adjusting since it didn't trigger MEDIUM.\");",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"key_events\": [\n    {\n      \"type\": \"keydown\",\n      \"key\": \"a\",\n      \"timestamp\": \"2026-07-26T12:00:00.000Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"a\",\n      \"timestamp\": \"2026-07-26T12:00:00.050Z\"\n    },\n    {\n      \"type\": \"keydown\",\n      \"key\": \"b\",\n      \"timestamp\": \"2026-07-26T12:00:01.500Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"b\",\n      \"timestamp\": \"2026-07-26T12:00:01.550Z\"\n    },\n    {\n      \"type\": \"keydown\",\n      \"key\": \"c\",\n      \"timestamp\": \"2026-07-26T12:00:03.200Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"c\",\n      \"timestamp\": \"2026-07-26T12:00:03.250Z\"\n    },\n    {\n      \"type\": \"keydown\",\n      \"key\": \"Backspace\",\n      \"timestamp\": \"2026-07-26T12:00:04.000Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"Backspace\",\n      \"timestamp\": \"2026-07-26T12:00:04.050Z\"\n    }\n  ],\n  \"mouse_events\": [\n    {\n      \"type\": \"mousemove\",\n      \"x\": 100,\n      \"y\": 100,\n      \"timestamp\": \"2026-07-26T12:00:00.000Z\"\n    },\n    {\n      \"type\": \"mousemove\",\n      \"x\": 800,\n      \"y\": 600,\n      \"timestamp\": \"2026-07-26T12:00:00.300Z\"\n    },\n    {\n      \"type\": \"mousemove\",\n      \"x\": 200,\n      \"y\": 300,\n      \"timestamp\": \"2026-07-26T12:00:01.000Z\"\n    }\n  ],\n  \"scroll_events\": [\n    {\n      \"type\": \"scroll\",\n      \"scrollY\": 200,\n      \"timestamp\": \"2026-07-26T12:00:00.600Z\"\n    }\n  ],\n  \"summary\": {\n    \"total_keys\": 4,\n    \"total_mouse_moves\": 3,\n    \"total_scrolls\": 1\n  }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/session/snapshot",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"session",
+						"snapshot"
+					]
+				},
+				"description": "Submits a behavioral snapshot designed to trigger a MEDIUM risk score. Upon receiving MEDIUM risk, saves log_id and session_id into environment variables for the OTP verification step."
+			},
+			"response": []
+		},
+		{
+			"name": "5. POST /verify-otp (Valid Code)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Response status is OTP_VERIFIED\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"OTP_VERIFIED\");",
+							"});",
+							"",
+							"pm.test(\"Response log_id matches saved log_id from step 4\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    var expectedLogId = pm.variables.get(\"log_id\");",
+							"    pm.expect(jsonData.log_id).to.eql(expectedLogId);",
+							"});",
+							"",
+							"pm.test(\"Response grace_period_minutes is 10\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.grace_period_minutes).to.eql(10);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"otp_code\": \"{{otp_code}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/verify-otp",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"verify-otp"
+					]
+				},
+				"description": "Verifies the OTP code submitted by the user after a MEDIUM-risk challenge. Set the {{otp_code}} variable in your Postman environment before sending."
+			},
+			"response": []
+		},
+		{
+			"name": "6. POST /session/snapshot (Repeat - Grace Period Check)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Assert response status is GRACE_PERIOD and risk_level is LOW\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"GRACE_PERIOD\");",
+							"    pm.expect(jsonData.risk_level).to.eql(\"LOW\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"session_id\": \"{{session_id}}\",\n  \"key_events\": [\n    {\n      \"type\": \"keydown\",\n      \"key\": \"m\",\n      \"timestamp\": \"2026-07-26T12:01:00.000Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"m\",\n      \"timestamp\": \"2026-07-26T12:01:00.050Z\"\n    }\n  ],\n  \"mouse_events\": [\n    {\n      \"type\": \"mousemove\",\n      \"x\": 100,\n      \"y\": 100,\n      \"timestamp\": \"2026-07-26T12:01:00.000Z\"\n    }\n  ],\n  \"scroll_events\": [],\n  \"summary\": {\n    \"total_keys\": 1,\n    \"total_mouse_moves\": 1,\n    \"total_scrolls\": 0\n  }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/session/snapshot",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"session",
+						"snapshot"
+					]
+				},
+				"description": "Repeats a snapshot call with the same session_id immediately after successful OTP verification to confirm that the backend enters a 10-minute grace period (status: GRACE_PERIOD, risk_level: LOW)."
+			},
+			"response": []
+		},
+		{
+			"name": "7a. POST /session/snapshot (Negative Test - New Session Trigger)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"var timestamp = Math.floor(Date.now() / 1000);",
+							"var negSessionId = \"postman-neg-test-\" + timestamp;",
+							"pm.environment.set(\"neg_session_id\", negSessionId);"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"session_id\": \"{{neg_session_id}}\",\n  \"key_events\": [\n    {\n      \"type\": \"keydown\",\n      \"key\": \"z\",\n      \"timestamp\": \"2026-07-26T12:05:00.000Z\"\n    },\n    {\n      \"type\": \"keyup\",\n      \"key\": \"z\",\n      \"timestamp\": \"2026-07-26T12:05:00.050Z\"\n    }\n  ],\n  \"mouse_events\": [\n    {\n      \"type\": \"mousemove\",\n      \"x\": 0,\n      \"y\": 0,\n      \"timestamp\": \"2026-07-26T12:05:00.000Z\"\n    }\n  ],\n  \"scroll_events\": [],\n  \"summary\": {\n    \"total_keys\": 1,\n    \"total_mouse_moves\": 1,\n    \"total_scrolls\": 0\n  }\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/session/snapshot",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"session",
+						"snapshot"
+					]
+				},
+				"description": "Negative Test Step 1: Submit a snapshot for a new session_id ({{neg_session_id}}) to set up the invalid OTP verification test."
+			},
+			"response": []
+		},
+		{
+			"name": "7b. POST /verify-otp (Negative Test - Invalid OTP Code)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Assert response status is SESSION_TERMINATED and risk_level is HIGH\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"SESSION_TERMINATED\");",
+							"    pm.expect(jsonData.risk_level).to.eql(\"HIGH\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"session_id\": \"{{neg_session_id}}\",\n  \"otp_code\": \"WRONG_CODE_999999\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/verify-otp",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"verify-otp"
+					]
+				},
+				"description": "Negative Test Step 2: Submits an intentionally wrong OTP code ('WRONG_CODE_999999'). Asserts status == 'SESSION_TERMINATED' and risk_level == 'HIGH'."
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "session_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "log_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "otp_code",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "neg_session_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "test_email",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "test_password",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "supabase_url",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "supabase_anon_key",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
