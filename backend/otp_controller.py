@@ -61,10 +61,10 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
     
 # ── OTP logic ─────────────────────────────────────────────────────────────────
 
-def issue_otp(user_id: str, session_id: str) -> dict:
-    otp_row = create_otp_challenge(user_id, session_id)
+def issue_otp(user_id: str, session_id: str, log_id: str | None = None) -> dict:
+    otp_row = create_otp_challenge(user_id, session_id, log_id=log_id)
     otp_id  = otp_row.get("id")
-    logger.info(f"OTP issued | user={user_id} session={session_id} id={otp_id}")
+    logger.info(f"OTP issued | user={user_id} session={session_id} id={otp_id} log_id={log_id}")
 
     email_sent = False
     try:

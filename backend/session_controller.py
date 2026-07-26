@@ -13,6 +13,7 @@ from supabase_client import (
     get_low_risk_session_logs,
     insert_behavior_features,
     sliding_window_cleanup,
+    sliding_window_cleanup_features,
     features_exist_for_session,
 )
 
@@ -168,8 +169,9 @@ def handle_snapshot(
 
 def handle_session_end(user_id: str, session_id: str) -> dict:
     """
-    Session ended — aggregate LOW-risk snapshot features and persist to
-    behavior_features. Then apply train / retrain / store logic.
+    Session ended — extract features from each LOW-risk snapshot and persist
+    each as its own row in behavior_features (one row per snapshot, not averaged).
+    Then apply train / retrain / store logic.
     Idempotent: skips if features already stored for this session.
     """
     logger.info(f"SESSION END | user={user_id} session={session_id}")
@@ -193,7 +195,7 @@ def handle_session_end(user_id: str, session_id: str) -> dict:
             "detail": "No LOW-risk snapshots found for this session",
         }
 
-    # Step 2 — extract features from each LOW-risk snapshot
+    # Step 2 — extract and persist features for each LOW-risk snapshot individually
     feature_list = []
     for log in low_risk_logs:
         feats = extract_features(
@@ -204,6 +206,7 @@ def handle_session_end(user_id: str, session_id: str) -> dict:
         )
         if feats:
             feature_list.append(feats)
+            insert_behavior_features(user_id, session_id, feats)  # one row PER SNAPSHOT
 
     if not feature_list:
         logger.warning(
@@ -215,23 +218,18 @@ def handle_session_end(user_id: str, session_id: str) -> dict:
             "detail": "Could not extract features from LOW-risk snapshots",
         }
 
-    # Step 3 — aggregate into one row
+    # Optional: log an aggregated summary for visibility (not persisted)
     aggregated = aggregate_features(feature_list)
-    if not aggregated:
-        logger.error(f"Feature aggregation failed for session {session_id}")
-        return {"status": "AGGREGATION_FAILED"}
-
-    # Step 4 — persist to behavior_features
     logger.info(
-        f"Inserting aggregated features for session {session_id} "
-        f"({len(feature_list)} snapshots averaged)"
+        f"Stored {len(feature_list)} snapshot-level feature rows for session {session_id} "
+        f"| aggregated means: {aggregated}"
     )
-    insert_behavior_features(user_id, session_id, aggregated)
 
-    # Step 5 — apply training logic (first train / retrain / store)
+    # Step 3 — apply training logic (first train / retrain / store)
     training_result = handle_session_end_training(user_id)
 
-    # Step 6 — sliding window cleanup (keep max 500 behavior_logs rows)
-    sliding_window_cleanup(user_id, max_logs=500)
+    # Step 4 — sliding window cleanup
+    sliding_window_cleanup(user_id, max_logs=500)           # behavior_logs
+    sliding_window_cleanup_features(user_id, max_sessions=60)  # behavior_features
 
     return training_result

@@ -15,9 +15,9 @@ from session_controller import handle_snapshot, handle_session_end, set_grace_pe
 from otp_controller import issue_otp, verify_otp
 from supabase_client import (
     get_user_status,
-    fetch_latest_features,
+    fetch_latest_features_by_sessions,
     get_model_metadata,
-    count_user_features,
+    count_user_sessions,
     update_behavior_log_risk_by_id,
 )
 
@@ -188,11 +188,12 @@ async def health():
 async def admin_train(user_id: str):
     """
     Force a full retrain from the user's stored behavior_features rows.
+    Uses session-aware fetching so the training set is never split mid-session.
     """
     from model_engine import train_model, ENROLLMENT_SESSIONS
 
     try:
-        rows = fetch_latest_features(user_id, limit=ENROLLMENT_SESSIONS)
+        rows = fetch_latest_features_by_sessions(user_id, session_limit=ENROLLMENT_SESSIONS)
         if not rows:
             raise HTTPException(
                 status_code=404,
@@ -202,7 +203,7 @@ async def admin_train(user_id: str):
         meta            = get_model_metadata(user_id)
         current_version = meta["model_version"] if meta else 0
         new_version     = current_version + 1
-        total           = count_user_features(user_id)
+        total           = count_user_sessions(user_id)
 
         train_model(user_id, rows, model_version=new_version, total_sessions=total)
 
@@ -228,7 +229,7 @@ async def admin_train(user_id: str):
 async def admin_debug(user_id: str):
     """
     Show raw feature values and what score the current model would give
-    each stored session.
+    each stored snapshot. Uses session-aware fetching.
     """
     from model_engine import (
         FEATURE_COLUMNS, _raw_row,
@@ -236,7 +237,7 @@ async def admin_debug(user_id: str):
     )
 
     try:
-        rows = fetch_latest_features(user_id, limit=ENROLLMENT_SESSIONS)
+        rows = fetch_latest_features_by_sessions(user_id, session_limit=ENROLLMENT_SESSIONS)
         if not rows:
             return {"detail": "No feature rows found for this user"}
 

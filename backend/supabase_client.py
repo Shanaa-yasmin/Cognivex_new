@@ -112,7 +112,7 @@ def count_user_logs(user_id: str) -> int:
 # ──────────────────────────────────────────────
 
 def insert_behavior_features(user_id: str, session_id: str, features: dict) -> dict:
-    """Insert one aggregated feature row at session end."""
+    """Insert one per-snapshot feature row into behavior_features."""
     row = {
         "user_id":                user_id,
         "session_id":             session_id,
@@ -144,7 +144,7 @@ def features_exist_for_session(user_id: str, session_id: str) -> bool:
 
 
 def count_user_features(user_id: str) -> int:
-    """Total behavior_features rows for a user."""
+    """Total behavior_features rows for a user (kept for legacy/admin use)."""
     resp = (
         _client.table("behavior_features")
         .select("id", count="exact")
@@ -154,8 +154,23 @@ def count_user_features(user_id: str) -> int:
     return resp.count or 0
 
 
+def count_user_sessions(user_id: str) -> int:
+    """
+    Return the number of DISTINCT session_ids in behavior_features for a user.
+    Used for enrollment and retrain threshold decisions (not raw row count).
+    """
+    resp = (
+        _client.table("behavior_features")
+        .select("session_id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    rows = resp.data or []
+    return len({r["session_id"] for r in rows if r.get("session_id")})
+
+
 def fetch_latest_features(user_id: str, limit: int = 15) -> list[dict]:
-    """Fetch the N most recent behavior_features rows for a user."""
+    """Fetch the N most recent behavior_features rows for a user (kept for legacy/admin use)."""
     resp = (
         _client.table("behavior_features")
         .select("*")
@@ -165,6 +180,91 @@ def fetch_latest_features(user_id: str, limit: int = 15) -> list[dict]:
         .execute()
     )
     return resp.data or []
+
+
+def fetch_latest_features_by_sessions(
+    user_id: str, session_limit: int
+) -> list[dict]:
+    """
+    Fetch ALL behavior_features rows belonging to the most recent
+    `session_limit` distinct session_ids for a user.
+
+    This avoids the "mid-session slice" problem where a plain row-limit
+    query splits one session's snapshots across the training boundary.
+    Rows are returned newest-first (by created_at).
+    """
+    # Step 1: get all distinct session_ids ordered by newest first
+    resp = (
+        _client.table("behavior_features")
+        .select("session_id, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    all_rows = resp.data or []
+
+    # Collect the most recent `session_limit` distinct session_ids
+    seen: set[str] = set()
+    selected_sessions: list[str] = []
+    for r in all_rows:
+        sid = r.get("session_id")
+        if sid and sid not in seen:
+            seen.add(sid)
+            selected_sessions.append(sid)
+        if len(selected_sessions) >= session_limit:
+            break
+
+    if not selected_sessions:
+        return []
+
+    # Step 2: fetch all feature rows for those sessions
+    resp2 = (
+        _client.table("behavior_features")
+        .select("*")
+        .eq("user_id", user_id)
+        .in_("session_id", selected_sessions)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return resp2.data or []
+
+
+def sliding_window_cleanup_features(user_id: str, max_sessions: int = 60) -> None:
+    """
+    Delete behavior_features rows for sessions older than the most recent
+    `max_sessions` distinct sessions. Mirrors sliding_window_cleanup() for logs.
+    """
+    resp = (
+        _client.table("behavior_features")
+        .select("session_id, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    all_rows = resp.data or []
+
+    seen: set[str] = set()
+    keep: list[str] = []
+    evict: set[str] = set()
+    for r in all_rows:
+        sid = r.get("session_id")
+        if not sid:
+            continue
+        if sid not in seen:
+            seen.add(sid)
+            if len(keep) < max_sessions:
+                keep.append(sid)
+            else:
+                evict.add(sid)
+
+    if evict:
+        _client.table("behavior_features").delete().in_(
+            "session_id", list(evict)
+        ).eq("user_id", user_id).execute()
+        logger.info(
+            f"sliding_window_cleanup_features | user={user_id} "
+            f"evicted {len(evict)} old session(s) from behavior_features"
+        )
 
 
 # ──────────────────────────────────────────────
@@ -258,7 +358,7 @@ def get_adaptive_thresholds(user_id: str) -> tuple[float | None, float | None]:
 # ──────────────────────────────────────────────
 
 
-def create_otp_challenge(user_id: str, session_id: str) -> dict:
+def create_otp_challenge(user_id: str, session_id: str, log_id: str | None = None) -> dict:
     """Create a new OTP challenge with 5-minute expiry."""
     now = datetime.now(timezone.utc)
     otp_code = str(random.randint(100000, 999999))  # ← random 6-digit code
@@ -341,7 +441,7 @@ def sliding_window_cleanup(user_id: str, max_logs: int = 500):
 def get_user_status(user_id: str) -> dict:
     """Return model version, total sessions, last risk level, and current thresholds."""
     meta = get_model_metadata(user_id)
-    total_sessions = count_user_features(user_id)
+    total_sessions = count_user_sessions(user_id)
 
     resp = (
         _client.table("behavior_logs")

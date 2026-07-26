@@ -170,8 +170,9 @@ def extract_features(
     # ── Mouse features ─────────────────────────────────────────────────────
 
     # CORRECTION 8: sort moves by timestamp before segment calculations
+    # Accept both "mousemove" (browser/frontend) and "MOVE" (legacy) casing
     moves = sorted(
-        [e for e in mouse_events if e.get("type") == "MOVE"],
+        [e for e in mouse_events if e.get("type", "").lower() in ("mousemove", "move")],
         key=lambda e: _parse_ts(e["timestamp"])
     )
 
@@ -214,8 +215,9 @@ def extract_features(
     # ── Scroll features ────────────────────────────────────────────────────
 
     # CORRECTION 9: sort scrolls by timestamp
+    # Accept both "scroll" (browser/frontend) and "SCROLL" (legacy) casing
     scrolls = sorted(
-        [e for e in scroll_events if e.get("type") == "SCROLL"],
+        [e for e in scroll_events if e.get("type", "").lower() == "scroll"],
         key=lambda e: _parse_ts(e["timestamp"])
     )
 

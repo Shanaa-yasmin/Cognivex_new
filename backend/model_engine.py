@@ -25,11 +25,13 @@ from sklearn.ensemble import IsolationForest
 
 from supabase_client import (
     fetch_latest_features,
+    fetch_latest_features_by_sessions,
     get_model_bytes,
     get_model_metadata,
     get_adaptive_thresholds,
     upsert_model_metadata,
     count_user_features,
+    count_user_sessions,
 )
 
 logger = logging.getLogger(__name__)
@@ -325,17 +327,19 @@ def predict_risk(
 
 def handle_session_end_training(user_id: str) -> dict:
     """
-    After a feature row is stored, decide whether to train or retrain.
+    After per-snapshot feature rows are stored, decide whether to train or retrain.
+    Counts are based on DISTINCT session_ids, not raw row count, so the enrollment
+    and retrain cadence is not inflated by multiple snapshots per session.
 
     Training window progression:
-      total < 15:              collecting data, no model yet
-      total == 15 (no model):  first train on all 15 rows
-      total > 15, model exists:
+      sessions < 15:              collecting data, no model yet
+      sessions == 15 (no model):  first train on all snapshots from 15 sessions
+      sessions > 15, model exists:
         - every RETRAIN_INTERVAL new sessions → retrain
-        - fetch min(total, SLIDING_WINDOW_CAP) rows for training
+        - fetch all rows from min(sessions, SLIDING_WINDOW_CAP) sessions
         - so window grows 15→16→...→50 then slides at 50
     """
-    total = count_user_features(user_id)
+    total = count_user_sessions(user_id)  # distinct sessions, not raw rows
 
     if total < ENROLLMENT_SESSIONS:
         return {"status": "COLLECTING_DATA", "sessions_collected": total}
@@ -344,7 +348,7 @@ def handle_session_end_training(user_id: str) -> dict:
 
     if not meta:
         window = _determine_training_window(total)
-        rows   = fetch_latest_features(user_id, limit=window)
+        rows   = fetch_latest_features_by_sessions(user_id, session_limit=window)
         train_model(user_id, rows, model_version=1, total_sessions=total)
         return {
             "status":        "MODEL_TRAINED",
@@ -358,7 +362,7 @@ def handle_session_end_training(user_id: str) -> dict:
 
     if (total - last_trained) >= RETRAIN_INTERVAL:
         window      = _determine_training_window(total)
-        rows        = fetch_latest_features(user_id, limit=window)
+        rows        = fetch_latest_features_by_sessions(user_id, session_limit=window)
         new_version = current_version + 1
         train_model(user_id, rows, model_version=new_version, total_sessions=total)
 
