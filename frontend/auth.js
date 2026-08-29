@@ -61,7 +61,8 @@ window.authHandler = {
     },
 
     async login(email, password) {
-        const errorMessage = document.getElementById('error-message');
+        // support both ids used across the app: 'error-message' (if any) and 'alertError' used in index.html
+        const errorMessage = document.getElementById('error-message') || document.getElementById('alertError');
         const loginButton = document.querySelector('#loginForm button[type="submit"]');
         const originalButtonText = loginButton?.textContent || 'Sign In';
 
@@ -99,18 +100,24 @@ window.authHandler = {
             console.error('✗ Login error:', error);
 
             if (errorMessage) {
-                const userMessage = error.message.includes('Invalid login credentials')
-                    ? '⚠ Invalid email or password. Please try again.'
+                // Map common auth errors to a user-friendly message
+                const msgLower = (error && error.message) ? error.message.toLowerCase() : '';
+                const isCredsError = msgLower.includes('invalid') || msgLower.includes('credentials') || msgLower.includes('wrong') || (error && error.status === 401);
+
+                const userMessage = isCredsError
+                    ? 'Incorrect email or password.'
                     : error.message || 'Login failed. Please try again.';
                 
                 errorMessage.textContent = userMessage;
                 errorMessage.classList.add('visible');
 
+                // Keep the alert visible for a short time
                 setTimeout(() => {
                     errorMessage.classList.remove('visible');
                 }, 5000);
             }
 
+            // Do NOT rethrow — we handle showing the message here so callers don't need to duplicate UI handling
         } finally {
             if (loginButton) {
                 loginButton.disabled = false;
